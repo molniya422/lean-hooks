@@ -89,11 +89,19 @@ export HARNESS_ROOT=~/.claude
 
 lean-hooks draws inspiration and design patterns from:
 
-- **[Everything Claude Code (ECC)](https://github.com/affaan-m/ECC)** — The pioneering full-stack Claude Code plugin ecosystem (209k+ stars). ECC demonstrated what's possible with Claude Code automation at scale: multi-agent orchestration, continuous learning, security scanning, and a comprehensive plugin marketplace. lean-hooks is the "minimal core" alternative — focused on the 20% of functionality that delivers 80% of the value, with zero external dependencies.
+- **[Everything Claude Code (ECC)](https://github.com/affaan-m/ECC)** — The pioneering full-stack Claude Code plugin ecosystem (209k+ stars). ECC demonstrated multi-agent orchestration at scale, security scanning (AgentShield), and continuous learning. lean-hooks adopted ECC's hook runtime control (`DISABLED_HOOKS`), rules layering, and lightweight security audit patterns, then stripped them to their minimal core.
 
-- **Claude Code Hooks System** — Anthropic's official hook infrastructure (`SessionStart`, `UserPromptSubmit`, `Stop`) that makes this project possible.
+- **[LangGraph](https://github.com/langchain-ai/langgraph)** — LangChain's stateful agent orchestration framework. Its graph-based execution model (State → Node → Edge → Checkpoint → Human-in-the-loop) directly inspired lean-hooks' two-phase multi-agent detection architecture and file-based state protocol.
 
-- **Vibe Coding** — This entire project was built through vibe coding: the author provided the ideas, architecture, and direction; Claude Code (the AI) wrote every line of code, handled all implementation details, fixed bugs, and iterated on feedback. The author's role was purely conceptual — defining requirements, providing feedback, and steering the design.
+- **[claude-mem-lite](https://github.com/thedotmack/claude-mem-lite)** — MCP memory search server providing SQLite-backed session log search. lean-hooks' `auto-summary.py` writes directly to claude-mem-lite's `session_logs` table.
+
+- **[CodeGraph](https://github.com/anthropics/codegraph)** — Tree-sitter-parsed knowledge graph MCP server for structural code queries. Referenced in lean-hooks' CLAUDE.md rules for efficient codebase exploration.
+
+- **[Claude Code](https://claude.ai/code)** — Anthropic's AI-powered CLI. The hook infrastructure (`SessionStart`, `UserPromptSubmit`, `Stop`) and plugin system that make this project possible.
+
+- **[superpowers](https://github.com/claude-plugins-official/superpowers)** — The official Claude Code plugin providing skill system patterns that influenced lean-hooks' skill trigger rules and feedback loop design.
+
+- **Vibe Coding** — This entire project was built through vibe coding: the author provided ideas, architecture, and direction; Claude Code wrote every line of code, handled all implementation details, fixed bugs, and iterated on feedback. Zero lines were hand-written by the author.
 
 ## License
 
