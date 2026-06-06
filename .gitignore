@@ -1,0 +1,21 @@
+# Auto-generated harness configs
+*.local.json
+settings.json
+CLAUDE.md
+
+# Python
+__pycache__/
+*.pyc
+
+# Data
+data/
+
+# User content
+projects/
+skill-feedback/feedback.md
+multiagent-feedback/feedback.md
+memory/
+
+# OS
+.DS_Store
+Thumbs.db

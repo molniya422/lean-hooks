@@ -1,0 +1,46 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HARNESS_ROOT/harness/health-check.sh\"",
+            "type": "command"
+          },
+          {
+            "command": "bash \"$HARNESS_ROOT/harness/security-audit.sh\"",
+            "type": "command"
+          },
+          {
+            "command": "bash \"$HARNESS_ROOT/harness/session-start-inject.sh\"",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HARNESS_ROOT/harness/post-task-detect.sh\"",
+            "type": "command"
+          },
+          {
+            "command": "bash \"$HARNESS_ROOT/harness/multiagent-detect.sh\"",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HARNESS_ROOT/harness/skillopt-collect.sh\"",
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}

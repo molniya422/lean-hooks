@@ -1,0 +1,114 @@
+# CLAUDE.md
+
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
+## 0. Startup — DO THIS FIRST
+
+**Before any tool call or response**, execute all three steps:
+
+1. **Search past work**: `mcp__mem-search-lite__search(query="<task in 3-5 words>", limit=5)`.
+2. **Read relevant memory files**: The SessionStart hook injects a live memory index with descriptions. If this task matches any listed topic, `Read` that file.
+3. **Match skill by task pattern** — invoke `Skill` BEFORE acting:
+
+| User says... | Invoke this skill |
+|---|---|
+| "bug/error/crash/报错/出问题" | `systematic-debugging` |
+| "implement/add/build/实现/添加/做" | `test-driven-development` |
+| "design/design audit/audit/审查设计/检查UI" | `design-is` |
+| "plan/设计/方案" (before coding) | `writing-plans` |
+| "review this PR"/"审查PR" | `pr-review` |
+| "done/fixed/complete/搞定" | `verification-before-completion` |
+| "create PPT/做PPT/presentation" | `ppt-master` |
+| "summarize/总结" | `summarize` |
+| "skill accuracy/trigger review/skillopt" | `skillopt` |
+| "permission/settings/config/设置/权限" | `update-config` |
+| "slow/optimize/perf/性能" | `performance` |
+| Multiple independent tasks | `dispatching-parallel-agents` |
+| `[MultiAgent Hook]` appears in context | **DISPATCH PARALLEL AGENTS** — use Agent tool |
+| "multiagent miss/false positive" | Record to `multiagent-feedback/feedback.md` |
+| "security/安全" + review | `security-review` |
+| "refactor/simplify/review code quality" | `code-simplifier` (Rust) |
+
+**Rule: when a pattern matches, invoke the skill. Don't deliberate. Invoke first, then decide if it was the right call.** Skipping = repeated mistakes.
+
+## 1. Think Before Coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+
+## 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No error handling for impossible scenarios.
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+## 5. Global Environment Preferences
+
+- Python: default to the specified Python environment. Set `HARNESS_PYTHON` env var for harness scripts.
+- Git clone location: clone repositories to a sensible drive/location.
+- No C: drive downloads: NEVER install, extract, or download large files to C: drive.
+
+## 6. Automatic Memory & SkillOpt Learning System
+
+These rules execute automatically — no user prompting needed.
+
+### 6.1 Memory System — Two-Tier Write Architecture
+
+**Tier 1 (auto): Session Log.** Every session with substantive work gets a 1-line log in SQLite.
+
+**Tier 2 (manual): Structured Memory.** Only when user explicitly says "记住" / "remember this". Write to `memory/` directory.
+
+### 6.2 SkillOpt Feedback Loop
+
+Automatically review skill trigger accuracy. Collect misses and false positives.
+Threshold: 3 signals → SessionStart reminder to optimize trigger rules.
+
+### 6.3 Multi-Agent Detection (multiagent-detect.sh)
+
+Two-phase heuristic scoring system detects complex tasks and suggests parallel agent dispatch.
+
+- **Phase 1**: Fast keyword/pattern matching (filters ~95% chat, zero cost)
+- **Phase 2**: Structural analysis (task verbs, file refs, tech boundaries)
+- Soft suggestion only — AI decides whether to dispatch.
+- Feedback via "multiagent miss" / "multiagent false positive".
+
+### 6.4 Harness Automation
+
+| Event | Script | Purpose |
+|---|---|---|
+| SessionStart | `health-check.sh` | Validates system integrity |
+| SessionStart | `security-audit.sh` | Lightweight security checks |
+| SessionStart | `session-start-inject.sh` | Injects memory index + 3-step checklist |
+| UserPromptSubmit | `multiagent-detect.sh` | Detects complex tasks → parallel agent suggestion |
+| UserPromptSubmit | `post-task-detect.sh` | Detects completion → write reminders |
+| Stop | `skillopt-collect.sh` | Syncs feedback counters → threshold alerts |
+| (on-demand) | `auto-summary.py` | Writes 1-line session log to SQLite |
+
+**DISABLED_HOOKS**: Temporarily disable hooks via `export DISABLED_HOOKS="multiagent-detect,post-task-detect"`.
