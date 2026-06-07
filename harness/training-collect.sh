@@ -8,7 +8,7 @@ set -euo pipefail
 export PYTHONIOENCODING=utf-8
 export PYTHONUTF8=1
 
-PY="${HARNESS_PYTHON:-python3}"
+PY="D:/jiqixuexi/anaconda/python.exe"
 HARNESS_ROOT="${HARNESS_ROOT:-$(dirname "$(dirname "$(readlink -f "$0")")")}"
 LOOP_DIR="${LOOP_DIR:-$HARNESS_ROOT/training-loop}"
 META="$LOOP_DIR/meta.json"
