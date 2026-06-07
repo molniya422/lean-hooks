@@ -117,8 +117,7 @@ else
 fi
 
 if [ -f "$CHROME_EXE" ]; then
-  chrome_ver=$("$CHROME_EXE" --version >/dev/null 2>&1 && echo "ok" || echo "unknown")
-  green "Chromium — $chrome_ver"
+  green "Chromium — $CHROME_EXE"
 else
   red "Chromium missing: $CHROME_EXE"
 fi
