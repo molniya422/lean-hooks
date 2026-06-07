@@ -33,7 +33,8 @@ export PYTHONUTF8=1
 
 # --- Common paths ---
 MEMORY_DIR="$HARNESS_ROOT/projects/\${PROJECT_NAME:-default}/memory"
-FEEDBACK_DIR="$HARNESS_ROOT/skill-feedback"
-MULTIAGENT_DIR="$HARNESS_ROOT/multiagent-feedback"
-TOOLCALL_DIR="$HARNESS_ROOT/toolcall-feedback"
+LOOP_DIR="$HARNESS_ROOT/training-loop"
+FEEDBACK_DIR="$HARNESS_ROOT/skill-feedback"    # legacy (transitioning to training-loop)
+MULTIAGENT_DIR="$HARNESS_ROOT/multiagent-feedback"  # legacy
+TOOLCALL_DIR="$HARNESS_ROOT/toolcall-feedback"  # legacy
 MEM_DB="$HARNESS_ROOT/data/claude-mem.db"

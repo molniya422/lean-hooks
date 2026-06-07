@@ -75,9 +75,15 @@ For multi-step tasks, state a brief plan:
 - Git clone location: clone repositories to a sensible drive/location.
 - No C: drive downloads: NEVER install, extract, or download large files to C: drive.
 
-## 6. Automatic Memory & SkillOpt Learning System
+## 6. Automatic Memory & TrainingLoop System
 
-These rules execute automatically — no user prompting needed.
+Three training dimensions share one unified feedback system at `training-loop/`:
+
+| Dimension | Focus | Feedback Format |
+|---|---|---|
+| SkillOpt | Skill trigger accuracy | `### Miss` / `### False Positive` |
+| MultiAgentOpt | Agent dispatch accuracy | `### Miss` / `### False Positive` |
+| ToolCallOpt | Tool call pattern quality | `### Positive` / `### Negative` |
 
 ### 6.1 Memory System — Two-Tier Write Architecture
 
@@ -85,10 +91,16 @@ These rules execute automatically — no user prompting needed.
 
 **Tier 2 (manual): Structured Memory.** Only when user explicitly says "记住" / "remember this". Write to `memory/` directory.
 
-### 6.2 SkillOpt Feedback Loop
+### 6.2 TrainingLoop — Unified Feedback System
 
-Automatically review skill trigger accuracy. Collect misses and false positives.
-Threshold: 3 signals → SessionStart reminder to optimize trigger rules.
+**Workflow:**
+1. `training-collect.sh` (Stop hook) syncs all 3 dimensions to unified meta.json
+2. `session-start-inject.sh` reads unified meta → single threshold alert block
+3. `post-task-detect.sh` prompts TrainingLoop reflection on completion
+4. All feedback writes to `training-loop/feedback.md` (one file, three ## sections)
+5. At 3 signals per dimension, SessionStart injects alert
+
+**Explicit triggers:** Say "skill miss"/"skill false positive", "multiagent miss"/"multiagent fp", "toolcall observation" to record.
 
 ### 6.3 Multi-Agent Detection (multiagent-detect.sh)
 
@@ -99,28 +111,7 @@ Two-phase heuristic scoring system detects complex tasks and suggests parallel a
 - Soft suggestion only — AI decides whether to dispatch.
 - Feedback via "multiagent miss" / "multiagent false positive".
 
-### 6.4 ToolCallOpt — Tool Call Training Closed Loop
-
-The third feedback loop tracks tool call pattern quality — completing the
-"full-process training closed loop" alongside SkillOpt and MultiAgentOpt.
-
-**Tracked patterns:**
-- Positive (reinforce): Read-before-Edit, test-after-change
-- Negative (correct): Blind Edit (Edit without Read), Retry Loop (same command 3x+),
-  Tiny Steps (5+ small consecutive Edits to same file)
-
-**How it works:**
-1. `toolcall-track.sh` (Stop hook) maintains a session counter
-2. Post-task completion prompts include ToolCallOpt reflection
-3. Record observations to `toolcall-feedback/feedback.md`:
-   - `### Positive <pattern>` — what worked well
-   - `### Negative <pattern>` — what to improve
-4. At 3 observations, SessionStart injects a threshold alert
-5. AI reviews patterns and self-corrects
-
-**Explicit trigger:** Say "toolcall observation" or "toolcall feedback" to record.
-
-### 6.5 Harness Automation
+### 6.4 Harness Automation
 
 | Event | Script | Purpose |
 |---|---|---|

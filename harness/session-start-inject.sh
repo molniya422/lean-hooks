@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# SessionStart injector — heavy mode v5
+# SessionStart injector — heavy mode v6 (unified training loop)
 # Injections:
 #   1. MANDATORY startup sequence: search claude-mem-lite + memory index + skill pattern match
-#   2. SkillOpt threshold alert (lowered to 3 for faster cycle)
+#   2. Unified TrainingLoop threshold alerts (SkillOpt + MultiAgentOpt + ToolCallOpt)
 #   3. Backfill hint (one-time)
 # Uses Anaconda python (MINGW64 python3 stub exits 49).
 set -euo pipefail
@@ -11,20 +11,27 @@ export PYTHONIOENCODING=utf-8
 export PYTHONUTF8=1
 
 PY="D:/jiqixuexi/anaconda/python.exe"
-META="D:/claude-ecosystem/config/skill-feedback/meta.json"
-TOOLCALL_META="D:/claude-ecosystem/config/toolcall-feedback/meta.json"
+LOOP_META="D:/claude-ecosystem/config/training-loop/meta.json"
+LEGACY_SKILL_META="D:/claude-ecosystem/config/skill-feedback/meta.json"
 MEMORY_DIR="D:/claude-ecosystem/config/projects/D--claude-ecosystem/memory"
+
+# Use unified meta; fall back to legacy skill-feedback if no training-loop yet
+META="${LOOP_META}"
+if [ ! -f "$META" ] && [ -f "$LEGACY_SKILL_META" ]; then
+  META="$LEGACY_SKILL_META"
+fi
 
 if [ ! -f "$META" ]; then
   echo '{"continue":true,"suppressOutput":true}'
   exit 0
 fi
 
-META_PATH="$META" MEMORY_DIR="$MEMORY_DIR" TOOLCALL_META="$TOOLCALL_META" "$PY" - <<'PYEOF'
+META_PATH="$META" MEMORY_DIR="$MEMORY_DIR" LOOP_META="$LOOP_META" "$PY" - <<'PYEOF'
 import json, os, re, sys
 
-# -- Read meta --
+# -- Read meta (unified or legacy) --
 meta_path = os.environ["META_PATH"]
+loop_meta = os.environ["LOOP_META"]
 try:
     d = json.loads(open(meta_path, encoding="utf-8").read())
 except Exception:
@@ -46,7 +53,6 @@ if os.path.isfile(mem_index):
             if line.startswith("- ["):
                 memory_items.append(line.lstrip("- "))
 
-# Parse frontmatter from each memory file to get descriptions
 memory_details = []
 for item in memory_items:
     m = re.match(r'\[([^\]]+)\]\(([^)]+)\)', item)
@@ -65,12 +71,7 @@ for item in memory_items:
                         desc = kv[1].strip()
         memory_details.append((name, filename, desc))
 
-# Build injection
-memory_list_lines = []
-for name, filename, desc in memory_details:
-    memory_list_lines.append(f"  - {name} ({filename}): {desc}")
-
-memory_block = "\n".join(memory_list_lines) if memory_list_lines else "  (no memory files found)"
+memory_block = "\n".join(f"  - {n} ({f}): {d}" for n, f, d in memory_details) if memory_details else "  (no memory files found)"
 
 startup = (
     "[MANDATORY - BLOCKING STARTUP CHECKLIST - DO NOT SKIP]\n"
@@ -100,50 +101,60 @@ startup = (
 )
 reminders.append(startup)
 
-# -- Injection 2a: SkillOpt threshold (lowered to 3 for faster cycle) --
-misses = d.get("misses", 0)
-fps = d.get("false_positives", 0)
-total = d.get("total_feedback_entries", misses + fps)
-threshold = d.get("threshold", 3)
-last_opt = d.get("last_optimized", "unknown")
+# -- Injection 2: Unified TrainingLoop threshold (all 3 dimensions) --
+# Try unified meta first (v2), fall back to legacy format (v1)
+dims = None
+if os.path.isfile(loop_meta):
+    try:
+        unified = json.loads(open(loop_meta, encoding="utf-8").read())
+        dims = unified.get("dimensions", {})
+    except Exception:
+        pass
 
-if total >= threshold:
-    reminders.append(
-        f"[SkillOpt Threshold] {total}/{threshold} (m={misses} fp={fps}), "
-        f"last optimized {last_opt}. Remind user to optimize CLAUDE.md Section 6 triggers."
-    )
+alerts = []
 
-# -- Injection 2b: MultiAgentOpt threshold --
-MULTIAGENT_META = "D:/claude-ecosystem/config/multiagent-feedback/meta.json"
-try:
-    ma = json.loads(open(MULTIAGENT_META, encoding="utf-8").read())
-    ma_misses = ma.get("misses", 0)
-    ma_fps = ma.get("false_positives", 0)
-    ma_total = ma.get("total_feedback_entries", ma_misses + ma_fps)
-    ma_threshold = ma.get("threshold", 3)
-    ma_last_opt = ma.get("last_optimized", "unknown")
-    if ma_total >= ma_threshold:
-        reminders.append(
-            f"[MultiAgentOpt Threshold] {ma_total}/{ma_threshold} (m={ma_misses} fp={ma_fps}), "
-            f"last optimized {ma_last_opt}. Remind user to optimize multiagent-detect scoring rules."
-        )
-except Exception:
-    pass
+if dims:
+    # --- Unified format (v2) ---
+    for dim_key, dim_name, fmt in [
+        ("skill", "SkillOpt", "trigger rules in CLAUDE.md"),
+        ("multiagent", "MultiAgentOpt", "multiagent-detect scoring rules"),
+        ("toolcall", "ToolCallOpt", "tool call patterns in training-loop/feedback.md"),
+    ]:
+        dim = dims.get(dim_key, {})
+        total = dim.get("total", dim.get("misses", 0) + dim.get("false_positives", 0) + dim.get("observations", 0))
+        threshold = dim.get("threshold", 3)
+        if total >= threshold:
+            alerts.append(f"[{dim_name}] {total}/{threshold} — review {fmt}")
+else:
+    # --- Legacy format (v1) — three separate meta files ---
+    misses = d.get("misses", 0)
+    fps = d.get("false_positives", 0)
+    total = d.get("total_feedback_entries", misses + fps)
+    threshold = d.get("threshold", 3)
+    if total >= threshold:
+        alerts.append(f"[SkillOpt] {total}/{threshold} (m={misses} fp={fps}) — review trigger rules")
 
-# -- Injection 2c: ToolCallOpt threshold --
-TOOLCALL_META = os.environ.get("TOOLCALL_META", "D:/claude-ecosystem/config/toolcall-feedback/meta.json")
-try:
-    tc = json.loads(open(TOOLCALL_META, encoding="utf-8").read())
-    tc_obs = tc.get("observations", 0)
-    tc_threshold = tc.get("threshold", 3)
-    tc_last_opt = tc.get("last_optimized", "unknown")
-    if tc_obs >= tc_threshold:
-        reminders.append(
-            f"[ToolCallOpt Threshold] {tc_obs}/{tc_threshold} observations, "
-            f"last optimized {tc_last_opt}. Review tool call patterns in toolcall-feedback/feedback.md."
-        )
-except Exception:
-    pass
+    ma_meta_path = "D:/claude-ecosystem/config/multiagent-feedback/meta.json"
+    try:
+        ma = json.loads(open(ma_meta_path, encoding="utf-8").read())
+        ma_total = ma.get("total_feedback_entries", ma.get("misses", 0) + ma.get("false_positives", 0))
+        if ma_total >= ma.get("threshold", 3):
+            alerts.append(f"[MultiAgentOpt] {ma_total}/{ma.get('threshold', 3)} — review scoring rules")
+    except Exception:
+        pass
+
+    tc_meta_path = "D:/claude-ecosystem/config/toolcall-feedback/meta.json"
+    try:
+        tc = json.loads(open(tc_meta_path, encoding="utf-8").read())
+        tc_obs = tc.get("observations", 0)
+        if tc_obs >= tc.get("threshold", 3):
+            alerts.append(f"[ToolCallOpt] {tc_obs}/{tc.get('threshold', 3)} — review tool call patterns")
+    except Exception:
+        pass
+
+if alerts:
+    reminders.append("[TrainingLoop] 统一训练系统阈值告警:\n" + "\n".join(f"  {a}" for a in alerts) +
+        "\n\n  反馈入口: training-loop/feedback.md (统一文件，按 ## SkillOpt / ## MultiAgentOpt / ## ToolCallOpt 分区)")
 
 # -- Injection 3: Backfill hint (one-time) --
 backfill_shown = d.get("backfill_hint_shown", False)
@@ -155,14 +166,11 @@ if not backfill_shown:
     updated["backfill_hint_shown"] = True
 
 # -- Injection 4: Hooks control hint + project type detection --
-
-# Hooks control
 reminders.append(
     "[Hooks Control] Temporarily disable hooks via: "
     'export DISABLED_HOOKS="multiagent-detect" (comma-separated, e.g. "multiagent-detect,post-task-detect")'
 )
 
-# Project type detection
 root = os.getcwd()
 detected = []
 if os.path.isfile(os.path.join(root, "Cargo.toml")):
@@ -172,9 +180,8 @@ if os.path.isfile(os.path.join(root, "package.json")):
 if os.path.isfile(os.path.join(root, "pyproject.toml")) or os.path.isfile(os.path.join(root, "requirements.txt")):
     detected.append("Python (pyproject.toml/requirements.txt)")
 if detected:
-    project_hint = ", ".join(detected)
     reminders.append(
-        f"[Project Type] Detected: {project_hint}. "
+        f"[Project Type] Detected: {', '.join(detected)}. "
         "Language-specific rules in config/rules/ (framework reserved for v2)."
     )
 

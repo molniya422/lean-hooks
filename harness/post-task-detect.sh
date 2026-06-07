@@ -210,10 +210,11 @@ if completion:
         "   有 -> echo '{\"project\":\"...\",\"summary\":\"...\",\"files\":\"...\"}' | python D:/claude-ecosystem/config/harness/auto-summary.py\n"
         "    纯聊天/无实质 -> echo '{\"has_substance\":false}' | python D:/claude-ecosystem/config/harness/auto-summary.py\n"
         "  Tier 2 (manual): 用户明确说了 记住/save/remember ?-> 写入 memory/*.md\n"
-        "  SkillOpt: 本轮有 skill 漏报/误报 ?-> 写入 skill-feedback/feedback.md\n"
-        "  ToolCallOpt: 本轮工具调用模式有值得记录的正/负样本 ?-> 写入 toolcall-feedback/feedback.md\n"
-        "    常见正样本: 先读后改、改完测试\n"
-        "    常见负样本: 盲改(Edit前无Read)、重试循环(同一命令3次+)、小碎步(多次小Edit)"
+        "  TrainingLoop: 本轮行为质量有值得记录的？→ 写入 training-loop/feedback.md\n"
+        "    ## SkillOpt: skill 触发准确/误报？\n"
+        "    ## MultiAgentOpt: agent 分发恰当/遗漏？\n"
+        "    ## ToolCallOpt: 工具调用效率如何？\n"
+        "    正/负样本均可，积累 3 条触发 SessionStart 提醒。"
     )
 
 if ma_feedback:

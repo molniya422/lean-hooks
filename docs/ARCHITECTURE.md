@@ -34,28 +34,25 @@ Each script sources `harness/env.sh` for Python detection (`$PY`) and config roo
 - Trigger at score >= 3 after Phase 2
 - Future: swappable with LLM classifier (interface already in code)
 
-## Triple Feedback Loops
+## Unified TrainingLoop
 
-### SkillOpt (skill-feedback/)
-Collects skill trigger accuracy signals (misses + false positives). Threshold: 5 entries. When reached, `session-start-inject.sh` prompts the user to optimize CLAUDE.md skill trigger rules.
+Three training dimensions share one structured feedback system at `training-loop/`:
 
-- `feedback.md` — human-editable signal log
-- `meta.json` — auto-synced counters from `skillopt-collect.sh`
-- `/skillopt` slash command forces immediate review
+- **SkillOpt** — skill trigger accuracy (misses + false positives)
+- **MultiAgentOpt** — agent dispatch accuracy (misses + false positives)
+- **ToolCallOpt** — tool call pattern quality (positive + negative observations)
 
-### MultiAgentOpt (multiagent-feedback/)
-Collects multiagent detection accuracy signals. Threshold: 3 entries. Users report false positives with "multiagent false positive" and misses with "multiagent miss". The `multiagent-detect.sh` script includes a prompt reminding users to provide this feedback.
+All three write to the same `feedback.md` under their `##` sections. A single `meta.json` tracks all counters across `dimensions.skill`, `dimensions.multiagent`, `dimensions.toolcall`.
 
-### ToolCallOpt (toolcall-feedback/) — Training Closed Loop
-The third feedback loop completes the "full-process tool call training closed loop":
+### Workflow
 
-1. **Observe**: `post-task-detect.sh` prompts tool call pattern reflection
-2. **Evaluate**: AI judges tool call quality (Read-before-Edit? Retry loops? Tiny steps?)
-3. **Record**: Observations written to `toolcall-feedback/feedback.md` (Positive/Negative)
-4. **Alert**: At 3+ observations, `session-start-inject.sh` surfaces threshold alert
-5. **Improve**: AI reviews past patterns and self-corrects future tool calls
+1. **Observe**: `post-task-detect.sh` prompts unified TrainingLoop reflection
+2. **Evaluate**: AI judges behavioral quality across all three dimensions
+3. **Record**: Observations written to `training-loop/feedback.md` (single file)
+4. **Alert**: `training-collect.sh` syncs meta.json; at 3+ signals, `session-start-inject.sh` surfaces alert
+5. **Improve**: AI reviews past patterns and self-corrects
 
-Cycle: Observe → Evaluate → Record → Alert → Improve → Observe (next session)
+Cycle: Observe → Evaluate → Record → Alert → Improve (next session)
 
 ## Memory System
 

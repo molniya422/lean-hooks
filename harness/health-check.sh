@@ -9,6 +9,9 @@ FEEDBACK_DIR="$ECOSYSTEM/config/skill-feedback"
 CLAUDE_MD="$ECOSYSTEM/config/CLAUDE.md"
 MEM_DB="$ECOSYSTEM/data/claude-mem/claude-mem.db"
 HARNESS_DIR="$ECOSYSTEM/config/harness"
+AGENT_BROWSER_BIN="$ECOSYSTEM/runtime/npm/node_modules/agent-browser/bin/agent-browser-win32-x64.exe"
+AGENT_BROWSER_WRAPPER="$ECOSYSTEM/tools/agent-browser.sh"
+CHROME_EXE="D:/Chromium/Application/chrome.exe"
 
 PASS=0
 FAIL=0
@@ -39,26 +42,25 @@ fi
 
 echo ""
 
-# 2. SkillOpt Feedback
-echo "[2] SkillOpt Feedback"
-if [ -f "$FEEDBACK_DIR/feedback.md" ]; then
+# 2. TrainingLoop Feedback (unified)
+echo "[2] TrainingLoop Feedback"
+LOOP_DIR="D:/claude-ecosystem/config/training-loop"
+if [ -d "$LOOP_DIR" ]; then
+  green "training-loop/ directory exists"
+else
+  red "training-loop/ directory missing: $LOOP_DIR"
+fi
+
+if [ -f "$LOOP_DIR/feedback.md" ]; then
   green "feedback.md exists"
 else
   red "feedback.md missing"
 fi
 
-if [ -f "$FEEDBACK_DIR/meta.json" ]; then
-  green "skill-feedback meta.json exists"
+if [ -f "$LOOP_DIR/meta.json" ]; then
+  green "meta.json exists"
 else
-  yellow "skill-feedback meta.json missing (will be created on first Stop hook)"
-fi
-
-# 2b. ToolCallOpt Feedback
-TOOLCALL_DIR="${TOOLCALL_DIR:-$(dirname "$HARNESS_DIR")/toolcall-feedback}"
-if [ -d "$TOOLCALL_DIR" ]; then
-  green "toolcall-feedback/ directory exists"
-else
-  yellow "toolcall-feedback/ directory not found (will be created on first Stop hook)"
+  yellow "meta.json missing (will be created on first Stop hook)"
 fi
 
 echo ""
@@ -86,7 +88,7 @@ echo ""
 
 # 5. Harness scripts
 echo "[5] Harness Scripts"
-for s in health-check.sh skillopt-collect.sh post-task-detect.sh session-start-inject.sh multiagent-detect.sh security-audit.sh toolcall-track.sh; do
+for s in health-check.sh training-collect.sh post-task-detect.sh session-start-inject.sh multiagent-detect.sh security-audit.sh; do
   if [ -x "$HARNESS_DIR/$s" ]; then
     green "$s — executable"
   elif [ -f "$HARNESS_DIR/$s" ]; then
@@ -95,6 +97,31 @@ for s in health-check.sh skillopt-collect.sh post-task-detect.sh session-start-i
     red "$s — missing"
   fi
 done
+
+echo ""
+
+# 6. Web Access (三层体系)
+echo "[6] Web Access"
+
+if [ -f "$AGENT_BROWSER_BIN" ]; then
+  ab_ver=$("$AGENT_BROWSER_BIN" --version 2>/dev/null || echo "unknown")
+  green "agent-browser binary — $ab_ver"
+else
+  red "agent-browser binary missing: $AGENT_BROWSER_BIN"
+fi
+
+if [ -f "$AGENT_BROWSER_WRAPPER" ]; then
+  green "agent-browser wrapper exists"
+else
+  red "agent-browser wrapper missing: $AGENT_BROWSER_WRAPPER"
+fi
+
+if [ -f "$CHROME_EXE" ]; then
+  chrome_ver=$("$CHROME_EXE" --version 2>/dev/null || echo "unknown")
+  green "Chromium — $chrome_ver"
+else
+  red "Chromium missing: $CHROME_EXE"
+fi
 
 echo ""
 echo "---"

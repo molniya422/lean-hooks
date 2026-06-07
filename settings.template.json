@@ -36,11 +36,7 @@
       {
         "hooks": [
           {
-            "command": "bash \"$HARNESS_ROOT/harness/skillopt-collect.sh\"",
-            "type": "command"
-          },
-          {
-            "command": "bash \"$HARNESS_ROOT/harness/toolcall-track.sh\"",
+            "command": "bash \"$HARNESS_ROOT/harness/training-collect.sh\"",
             "type": "command"
           }
         ]
