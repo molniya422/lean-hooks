@@ -35,4 +35,5 @@ export PYTHONUTF8=1
 MEMORY_DIR="$HARNESS_ROOT/projects/\${PROJECT_NAME:-default}/memory"
 FEEDBACK_DIR="$HARNESS_ROOT/skill-feedback"
 MULTIAGENT_DIR="$HARNESS_ROOT/multiagent-feedback"
+TOOLCALL_DIR="$HARNESS_ROOT/toolcall-feedback"
 MEM_DB="$HARNESS_ROOT/data/claude-mem.db"

@@ -99,7 +99,28 @@ Two-phase heuristic scoring system detects complex tasks and suggests parallel a
 - Soft suggestion only — AI decides whether to dispatch.
 - Feedback via "multiagent miss" / "multiagent false positive".
 
-### 6.4 Harness Automation
+### 6.4 ToolCallOpt — Tool Call Training Closed Loop
+
+The third feedback loop tracks tool call pattern quality — completing the
+"full-process training closed loop" alongside SkillOpt and MultiAgentOpt.
+
+**Tracked patterns:**
+- Positive (reinforce): Read-before-Edit, test-after-change
+- Negative (correct): Blind Edit (Edit without Read), Retry Loop (same command 3x+),
+  Tiny Steps (5+ small consecutive Edits to same file)
+
+**How it works:**
+1. `toolcall-track.sh` (Stop hook) maintains a session counter
+2. Post-task completion prompts include ToolCallOpt reflection
+3. Record observations to `toolcall-feedback/feedback.md`:
+   - `### Positive <pattern>` — what worked well
+   - `### Negative <pattern>` — what to improve
+4. At 3 observations, SessionStart injects a threshold alert
+5. AI reviews patterns and self-corrects
+
+**Explicit trigger:** Say "toolcall observation" or "toolcall feedback" to record.
+
+### 6.5 Harness Automation
 
 | Event | Script | Purpose |
 |---|---|---|

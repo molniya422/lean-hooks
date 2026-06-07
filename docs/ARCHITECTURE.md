@@ -34,7 +34,7 @@ Each script sources `harness/env.sh` for Python detection (`$PY`) and config roo
 - Trigger at score >= 3 after Phase 2
 - Future: swappable with LLM classifier (interface already in code)
 
-## Dual Feedback Loops
+## Triple Feedback Loops
 
 ### SkillOpt (skill-feedback/)
 Collects skill trigger accuracy signals (misses + false positives). Threshold: 5 entries. When reached, `session-start-inject.sh` prompts the user to optimize CLAUDE.md skill trigger rules.
@@ -45,6 +45,17 @@ Collects skill trigger accuracy signals (misses + false positives). Threshold: 5
 
 ### MultiAgentOpt (multiagent-feedback/)
 Collects multiagent detection accuracy signals. Threshold: 3 entries. Users report false positives with "multiagent false positive" and misses with "multiagent miss". The `multiagent-detect.sh` script includes a prompt reminding users to provide this feedback.
+
+### ToolCallOpt (toolcall-feedback/) — Training Closed Loop
+The third feedback loop completes the "full-process tool call training closed loop":
+
+1. **Observe**: `post-task-detect.sh` prompts tool call pattern reflection
+2. **Evaluate**: AI judges tool call quality (Read-before-Edit? Retry loops? Tiny steps?)
+3. **Record**: Observations written to `toolcall-feedback/feedback.md` (Positive/Negative)
+4. **Alert**: At 3+ observations, `session-start-inject.sh` surfaces threshold alert
+5. **Improve**: AI reviews past patterns and self-corrects future tool calls
+
+Cycle: Observe → Evaluate → Record → Alert → Improve → Observe (next session)
 
 ## Memory System
 

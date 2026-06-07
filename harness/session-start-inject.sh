@@ -12,6 +12,7 @@ export PYTHONUTF8=1
 
 PY="D:/jiqixuexi/anaconda/python.exe"
 META="D:/claude-ecosystem/config/skill-feedback/meta.json"
+TOOLCALL_META="D:/claude-ecosystem/config/toolcall-feedback/meta.json"
 MEMORY_DIR="D:/claude-ecosystem/config/projects/D--claude-ecosystem/memory"
 
 if [ ! -f "$META" ]; then
@@ -19,7 +20,7 @@ if [ ! -f "$META" ]; then
   exit 0
 fi
 
-META_PATH="$META" MEMORY_DIR="$MEMORY_DIR" "$PY" - <<'PYEOF'
+META_PATH="$META" MEMORY_DIR="$MEMORY_DIR" TOOLCALL_META="$TOOLCALL_META" "$PY" - <<'PYEOF'
 import json, os, re, sys
 
 # -- Read meta --
@@ -125,6 +126,21 @@ try:
         reminders.append(
             f"[MultiAgentOpt Threshold] {ma_total}/{ma_threshold} (m={ma_misses} fp={ma_fps}), "
             f"last optimized {ma_last_opt}. Remind user to optimize multiagent-detect scoring rules."
+        )
+except Exception:
+    pass
+
+# -- Injection 2c: ToolCallOpt threshold --
+TOOLCALL_META = os.environ.get("TOOLCALL_META", "D:/claude-ecosystem/config/toolcall-feedback/meta.json")
+try:
+    tc = json.loads(open(TOOLCALL_META, encoding="utf-8").read())
+    tc_obs = tc.get("observations", 0)
+    tc_threshold = tc.get("threshold", 3)
+    tc_last_opt = tc.get("last_optimized", "unknown")
+    if tc_obs >= tc_threshold:
+        reminders.append(
+            f"[ToolCallOpt Threshold] {tc_obs}/{tc_threshold} observations, "
+            f"last optimized {tc_last_opt}. Review tool call patterns in toolcall-feedback/feedback.md."
         )
 except Exception:
     pass

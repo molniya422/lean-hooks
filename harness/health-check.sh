@@ -48,9 +48,17 @@ else
 fi
 
 if [ -f "$FEEDBACK_DIR/meta.json" ]; then
-  green "meta.json exists"
+  green "skill-feedback meta.json exists"
 else
-  yellow "meta.json missing (will be created on first Stop hook)"
+  yellow "skill-feedback meta.json missing (will be created on first Stop hook)"
+fi
+
+# 2b. ToolCallOpt Feedback
+TOOLCALL_DIR="${TOOLCALL_DIR:-$(dirname "$HARNESS_DIR")/toolcall-feedback}"
+if [ -d "$TOOLCALL_DIR" ]; then
+  green "toolcall-feedback/ directory exists"
+else
+  yellow "toolcall-feedback/ directory not found (will be created on first Stop hook)"
 fi
 
 echo ""
@@ -78,7 +86,7 @@ echo ""
 
 # 5. Harness scripts
 echo "[5] Harness Scripts"
-for s in health-check.sh skillopt-collect.sh post-task-detect.sh session-start-inject.sh multiagent-detect.sh security-audit.sh; do
+for s in health-check.sh skillopt-collect.sh post-task-detect.sh session-start-inject.sh multiagent-detect.sh security-audit.sh toolcall-track.sh; do
   if [ -x "$HARNESS_DIR/$s" ]; then
     green "$s — executable"
   elif [ -f "$HARNESS_DIR/$s" ]; then

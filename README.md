@@ -14,6 +14,7 @@ A lightweight, zero-dependency automation harness for Claude Code — hooks, mem
 | UserPromptSubmit | `post-task-detect.sh` | Detects completion signals → injects write reminders |
 | UserPromptSubmit | `multiagent-detect.sh` | Two-phase heuristic: suggests parallel agent dispatch for complex tasks |
 | Stop | `skillopt-collect.sh` | Parses feedback.md → syncs meta.json → emits threshold alerts |
+| Stop | `toolcall-track.sh` | ToolCallOpt: tracks tool call patterns, closes the training loop |
 | (manual) | `auto-summary.py` | Writes 1-line session log to SQLite (searchable via claude-mem-lite) |
 
 ## Quick Start
@@ -48,6 +49,7 @@ export HARNESS_PYTHON=/path/to/python
 ├── harness/           ← all hook scripts
 ├── skill-feedback/    ← SkillOpt feedback loop (feedback.md + meta.json)
 ├── multiagent-feedback/ ← MultiAgentOpt feedback loop
+├── toolcall-feedback/  ← ToolCallOpt feedback loop (training closed loop)
 ├── memory/            ← MEMORY.md + per-project memory files
 ├── projects/          ← per-project auto-generated content
 └── data/              ← SQLite DB for session logs
@@ -71,6 +73,15 @@ Threshold: 3 entries → SessionStart reminds you to optimize trigger rules.
 ### MultiAgentOpt
 Same pattern for multi-agent detection accuracy.
 Say "multiagent miss" or "multiagent false positive" to record feedback.
+
+### ToolCallOpt — Full-Process Training Closed Loop
+Tracks tool call pattern quality (Read-before-Edit, Retry Loops, Tiny Steps).
+Say "toolcall observation" to record feedback at any time.
+Threshold: 3 observations → SessionStart surfaces learning suggestions.
+
+```
+Observe → Evaluate → Record → Alert → Improve → (next session)
+```
 
 ## Customization
 

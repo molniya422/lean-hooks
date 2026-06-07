@@ -38,6 +38,10 @@
           {
             "command": "bash \"$HARNESS_ROOT/harness/skillopt-collect.sh\"",
             "type": "command"
+          },
+          {
+            "command": "bash \"$HARNESS_ROOT/harness/toolcall-track.sh\"",
+            "type": "command"
           }
         ]
       }
