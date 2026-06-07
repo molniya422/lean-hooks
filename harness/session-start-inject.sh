@@ -1,31 +1,29 @@
 #!/usr/bin/env bash
-# SessionStart injector — injects mandatory startup checklist and threshold reminders.
-# Sources env.sh for $PY (Python) and $HARNESS_ROOT (config directory).
+# SessionStart injector — heavy mode v5
 # Injections:
 #   1. MANDATORY startup sequence: search claude-mem-lite + memory index + skill pattern match
-#   2. SkillOpt threshold alert (threshold: 3 for fast feedback cycle)
-#   3. MultiAgentOpt threshold alert
-#   4. Backfill hint (one-time)
-#   5. Hooks control hint + project type detection
+#   2. SkillOpt threshold alert (lowered to 3 for faster cycle)
+#   3. Backfill hint (one-time)
+# Uses Anaconda python (MINGW64 python3 stub exits 49).
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/env.sh"
+export PYTHONIOENCODING=utf-8
+export PYTHONUTF8=1
 
-META="$HARNESS_ROOT/skill-feedback/meta.json"
+PY="D:/jiqixuexi/anaconda/python.exe"
+META="D:/claude-ecosystem/config/skill-feedback/meta.json"
+MEMORY_DIR="D:/claude-ecosystem/config/projects/D--claude-ecosystem/memory"
 
 if [ ! -f "$META" ]; then
   echo '{"continue":true,"suppressOutput":true}'
   exit 0
 fi
 
-HARNESS_ROOT="$HARNESS_ROOT" "$PY" - <<'PYEOF'
+META_PATH="$META" MEMORY_DIR="$MEMORY_DIR" "$PY" - <<'PYEOF'
 import json, os, re, sys
 
-harness_root = os.environ["HARNESS_ROOT"]
-
 # -- Read meta --
-meta_path = os.path.join(harness_root, "skill-feedback", "meta.json")
+meta_path = os.environ["META_PATH"]
 try:
     d = json.loads(open(meta_path, encoding="utf-8").read())
 except Exception:
@@ -36,7 +34,7 @@ reminders = []
 updated = {}
 
 # -- Injection 1: MANDATORY startup with live memory index --
-memory_dir = os.path.join(harness_root, "memory")
+memory_dir = os.environ["MEMORY_DIR"]
 mem_index = os.path.join(memory_dir, "MEMORY.md")
 
 memory_items = []
@@ -115,9 +113,9 @@ if total >= threshold:
     )
 
 # -- Injection 2b: MultiAgentOpt threshold --
-multiagent_meta_path = os.path.join(harness_root, "multiagent-feedback", "meta.json")
+MULTIAGENT_META = "D:/claude-ecosystem/config/multiagent-feedback/meta.json"
 try:
-    ma = json.loads(open(multiagent_meta_path, encoding="utf-8").read())
+    ma = json.loads(open(MULTIAGENT_META, encoding="utf-8").read())
     ma_misses = ma.get("misses", 0)
     ma_fps = ma.get("false_positives", 0)
     ma_total = ma.get("total_feedback_entries", ma_misses + ma_fps)

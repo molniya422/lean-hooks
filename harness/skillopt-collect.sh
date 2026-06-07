@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
-# SkillOpt + MultiAgentOpt feedback counter — Stop hook
-# Parses feedback.md files to keep meta.json in sync.
-# The AI still judges what to record (per CLAUDE.md).
+# SkillOpt session + feedback counter — Stop hook
+# Heavy mode v2: parses feedback.md to keep meta.json in sync.
+# The AI still does the judgment of what to record (per CLAUDE.md §6.2).
+# This script only maintains the counter and emits threshold alerts.
+# Uses Anaconda python explicitly — MINGW64's `python3` (WindowsApps stub)
+# exits 49 and breaks hooks silently.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/env.sh"
+export PYTHONIOENCODING=utf-8
+export PYTHONUTF8=1
 
-META="$HARNESS_ROOT/skill-feedback/meta.json"
-FEEDBACK="$HARNESS_ROOT/skill-feedback/feedback.md"
-MULTIAGENT_META="$HARNESS_ROOT/multiagent-feedback/meta.json"
-MULTIAGENT_FEEDBACK="$HARNESS_ROOT/multiagent-feedback/feedback.md"
+PY="D:/jiqixuexi/anaconda/python.exe"
+META="D:/claude-ecosystem/config/skill-feedback/meta.json"
+FEEDBACK="D:/claude-ecosystem/config/skill-feedback/feedback.md"
+MULTIAGENT_META="D:/claude-ecosystem/config/multiagent-feedback/meta.json"
+MULTIAGENT_FEEDBACK="D:/claude-ecosystem/config/multiagent-feedback/feedback.md"
 THRESHOLD=5
 MA_THRESHOLD=3
 
@@ -23,16 +27,16 @@ else
   last_optimized=unknown
 fi
 
-# Count skill-feedback entries
+# Count actual entries in skill-feedback.md (single source of truth)
 misses=0
 fps=0
 if [ -f "$FEEDBACK" ]; then
-  misses=$(grep -c '^### .*[Mm]iss' "$FEEDBACK" 2>/dev/null || echo 0)
-  fps=$(grep -c '^### .*[Ff]alse [Pp]ositive' "$FEEDBACK" 2>/dev/null || echo 0)
+  misses=$(grep -c '^### 漏报' "$FEEDBACK" 2>/dev/null || echo 0)
+  fps=$(grep -c '^### 误报' "$FEEDBACK" 2>/dev/null || echo 0)
 fi
 entries=$((misses + fps))
 
-# Count multiagent-feedback entries
+# Count actual entries in multiagent-feedback.md
 ma_misses=0
 ma_fps=0
 if [ -f "$MULTIAGENT_FEEDBACK" ]; then
@@ -74,19 +78,23 @@ d = {
 json.dump(d, open(r'$MULTIAGENT_META', 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
 "
 
-# Stderr alerts
+# Stderr output goes to AI context (not user-visible)
 if [ "$entries" -ge "$THRESHOLD" ]; then
   cat >&2 <<EOF
-[SkillOpt] THRESHOLD — $entries/$THRESHOLD signals. Review CLAUDE.md trigger rules.
+[SkillOpt] THRESHOLD REACHED — $entries/$THRESHOLD signals accumulated.
+Action required: review CLAUDE.md Section 6 trigger rules, then reset meta.json threshold check.
 EOF
 fi
 
 if [ "$ma_entries" -ge "$MA_THRESHOLD" ]; then
   cat >&2 <<EOF
-[MultiAgentOpt] THRESHOLD — $ma_entries/$MA_THRESHOLD signals. Review multiagent-detect scoring rules.
+[MultiAgentOpt] THRESHOLD REACHED — $ma_entries/$MA_THRESHOLD signals accumulated.
+Action required: review multiagent-detect scoring rules in config/harness/multiagent-detect.sh.
 EOF
 fi
 
-# Stdout log
-echo "[Harness] Session #$sessions. SkillOpt: $entries/$THRESHOLD (m=$misses fp=$fps). MAOpt: $ma_entries/$MA_THRESHOLD (m=$ma_misses fp=$ma_fps)."
+# Stdout: silent to user, but echo for log
+echo "[Harness] Session #$sessions logged. SkillOpt: $entries/$THRESHOLD (m=$misses fp=$fps). MultiAgentOpt: $ma_entries/$MA_THRESHOLD (m=$ma_misses fp=$ma_fps)."
+
+# Hook protocol output
 echo '{"continue":true,"suppressOutput":true}'

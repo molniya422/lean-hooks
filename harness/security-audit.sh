@@ -4,12 +4,10 @@
 # Checks: .env exposure, plaintext API keys, harness permissions.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/env.sh"
-
-CLAUDE_MD="$HARNESS_ROOT/CLAUDE.md"
-SETTINGS_JSON="$HARNESS_ROOT/settings.json"
-HARNESS_DIR="$HARNESS_ROOT/harness"
+ECOSYSTEM="D:/claude-ecosystem"
+CLAUDE_MD="$ECOSYSTEM/config/CLAUDE.md"
+SETTINGS_JSON="$ECOSYSTEM/config/settings.json"
+HARNESS_DIR="$ECOSYSTEM/config/harness"
 CWD=$(pwd)
 
 PASS=0
@@ -30,7 +28,7 @@ if [ -f "$CWD/.env" ]; then
     if [ -f "$CWD/.gitignore" ] && grep -q '\.env' "$CWD/.gitignore" 2>/dev/null; then
         green ".env present but ignored by git"
     else
-        red ".env detected but NOT in .gitignore"
+        red ".env detected but NOT in .gitignore — risk of accidental commit"
         ENV_ISSUES=$((ENV_ISSUES+1))
     fi
 fi

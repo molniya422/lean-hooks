@@ -5,8 +5,8 @@ Reads a JSON record from stdin (or --summary/-s/-p/-f flags) and writes a
 lightweight session log row to the claude-mem SQLite database. The
 mem-search-lite MCP can then search these logs.
 
-Auto-detects DB path from CLAUDE_MEM_DATA_DIR env var, or falls back to
-$HARNESS_ROOT/data/claude-mem.db.
+Auto-detects DB path from CLAUDE_MEM_DATA_DIR, or defaults to
+D:/claude-ecosystem/data/claude-mem/claude-mem.db.
 
 Usage:
   echo '{"project":"foo","summary":"fixed login bug","files":"auth.ts,login.tsx","has_substance":true}' | python auto-summary.py
@@ -22,21 +22,14 @@ from datetime import datetime, timezone
 
 
 def find_db():
-    """Locate claude-mem.db using CLAUDE_MEM_DATA_DIR or HARNESS_ROOT env vars."""
     data_dir = os.environ.get("CLAUDE_MEM_DATA_DIR")
-    if data_dir:
-        return os.path.join(data_dir, "claude-mem.db")
-
-    # Fallback: HARNESS_ROOT/data/claude-mem.db
-    harness_root = os.environ.get("HARNESS_ROOT")
-    if harness_root:
-        return os.path.join(harness_root, "data", "claude-mem.db")
-
-    # Last resort: relative to this script's location
-    candidate = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "..", "data"
-    )
-    return os.path.join(os.path.abspath(candidate), "claude-mem.db")
+    if not data_dir:
+        # Fallback to claude-ecosystem structure
+        candidate = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "..", "data", "claude-mem"
+        )
+        data_dir = os.path.abspath(candidate)
+    return os.path.join(data_dir, "claude-mem.db")
 
 
 def ensure_schema(conn):
@@ -69,7 +62,7 @@ def parse_input():
             try:
                 return json.loads(raw)
             except json.JSONDecodeError:
-                print("auto-summary: invalid JSON from stdin", file=sys.stderr)
+                print(f"auto-summary: invalid JSON from stdin", file=sys.stderr)
                 sys.exit(1)
 
     # Fallback to CLI flags

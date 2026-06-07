@@ -1,16 +1,14 @@
 #!/usr/bin/env bash
-# Harness — health check
-# Validates all harness systems. Run manually or via SessionStart hook.
+# claude-ecosystem harness — health check
+# Validates all four systems. Run manually or via SessionStart hook.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/env.sh"
-
-MEMORY_DIR="$HARNESS_ROOT/memory"
-FEEDBACK_DIR="$HARNESS_ROOT/skill-feedback"
-CLAUDE_MD="$HARNESS_ROOT/CLAUDE.md"
-MEM_DB="$HARNESS_ROOT/data/claude-mem.db"
-HARNESS_DIR="$HARNESS_ROOT/harness"
+ECOSYSTEM="D:/claude-ecosystem"
+MEMORY_DIR="$ECOSYSTEM/config/projects/D--claude-ecosystem/memory"
+FEEDBACK_DIR="$ECOSYSTEM/config/skill-feedback"
+CLAUDE_MD="$ECOSYSTEM/config/CLAUDE.md"
+MEM_DB="$ECOSYSTEM/data/claude-mem/claude-mem.db"
+HARNESS_DIR="$ECOSYSTEM/config/harness"
 
 PASS=0
 FAIL=0
@@ -29,14 +27,14 @@ echo "[1] Memory System"
 if [ -d "$MEMORY_DIR" ]; then
   green "memory/ directory exists"
 else
-  yellow "memory/ directory not found at $MEMORY_DIR"
+  red "memory/ directory missing: $MEMORY_DIR"
 fi
 
 if [ -f "$MEMORY_DIR/MEMORY.md" ]; then
   entries=$(grep -c '^\-\ \[' "$MEMORY_DIR/MEMORY.md" 2>/dev/null || echo 0)
   green "MEMORY.md ($entries entries)"
 else
-  yellow "MEMORY.md not found (will be created on first use)"
+  red "MEMORY.md missing"
 fi
 
 echo ""
@@ -46,23 +44,23 @@ echo "[2] SkillOpt Feedback"
 if [ -f "$FEEDBACK_DIR/feedback.md" ]; then
   green "feedback.md exists"
 else
-  yellow "feedback.md not found (will be created)"
+  red "feedback.md missing"
 fi
 
 if [ -f "$FEEDBACK_DIR/meta.json" ]; then
   green "meta.json exists"
 else
-  yellow "meta.json missing (created on first Stop hook)"
+  yellow "meta.json missing (will be created on first Stop hook)"
 fi
 
 echo ""
 
 # 3. CLAUDE.md Section 6
-echo "[3] CLAUDE.md"
+echo "[3] CLAUDE.md Section 6"
 if grep -q "Automatic Memory" "$CLAUDE_MD" 2>/dev/null; then
   green "Section 6 present"
 else
-  yellow "Section 6 not found in CLAUDE.md"
+  red "Section 6 missing"
 fi
 
 echo ""
@@ -73,12 +71,12 @@ if [ -f "$MEM_DB" ]; then
   size=$(stat -c%s "$MEM_DB" 2>/dev/null || echo 0)
   green "database exists (${size} bytes)"
 else
-  yellow "database not found at $MEM_DB (will be created on first session log)"
+  red "database missing: $MEM_DB"
 fi
 
 echo ""
 
-# 5. Harness Scripts
+# 5. Harness scripts
 echo "[5] Harness Scripts"
 for s in health-check.sh skillopt-collect.sh post-task-detect.sh session-start-inject.sh multiagent-detect.sh security-audit.sh; do
   if [ -x "$HARNESS_DIR/$s" ]; then

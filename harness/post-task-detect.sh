@@ -3,11 +3,14 @@
 # Heavy mode v2: detects completion signals in user prompt and injects a
 # reminder to AI context. The AI still judges whether to actually write
 # memory / record feedback (per CLAUDE.md §6.1 + §6.2).
-# Sources harness/env.sh for $PY (Python) and $HARNESS_ROOT.
+# Uses Anaconda python explicitly (MINGW64 python3 stub exits 49).
+# Sets PYTHONIOENCODING=utf-8 to keep JSON output valid UTF-8.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/env.sh"
+export PYTHONIOENCODING=utf-8
+export PYTHONUTF8=1
+
+PY="D:/jiqixuexi/anaconda/python.exe"
 
 INPUT=$(cat)
 
@@ -20,14 +23,6 @@ import sys
 try:
     data = json.loads(os.environ["HOOK_INPUT"])
 except Exception:
-    sys.exit(0)
-
-# --- DISABLED HOOKS CHECK ---
-# Users can temporarily disable this hook via: export DISABLED_HOOKS="post-task-detect"
-# or comma-separated: export DISABLED_HOOKS="post-task-detect,multiagent-detect"
-disabled = os.environ.get("DISABLED_HOOKS", "")
-if "post-task" in disabled.lower() or "post-task-detect" in disabled.lower():
-    print(json.dumps({"continue": True, "suppressOutput": True}))
     sys.exit(0)
 
 prompt = data.get("prompt", "") or ""
@@ -210,22 +205,22 @@ reminders = []
 
 if completion:
     reminders.append(
-        "[Post-Task Hook] Task completion detected. Perform two-tier write check:\n"
-        "  Tier 1 (auto): Did this session have substantive work (Edit/Write/Bash/fix/deploy)?\n"
-        "   Yes -> echo '{\"project\":\"...\",\"summary\":\"...\",\"files\":\"...\"}' | $PY $HARNESS_ROOT/harness/auto-summary.py\n"
-        "   Pure chat -> echo '{\"has_substance\":false}' | $PY $HARNESS_ROOT/harness/auto-summary.py\n"
-        "  Tier 2 (manual): Did user explicitly say remember/save? -> write to memory/*.md\n"
-        "  SkillOpt: Any skill misses/false positives this session? -> write to $HARNESS_ROOT/skill-feedback/feedback.md"
+        "[Post-Task Hook] 任务完成。执行两层写入检查:\n"
+        "  Tier 1 (auto): 本轮有实质操作(Edit/Write/Bash/修复/部署)有?\n"
+        "   有 -> echo '{\"project\":\"...\",\"summary\":\"...\",\"files\":\"...\"}' | python D:/claude-ecosystem/config/harness/auto-summary.py\n"
+        "    纯聊天/无实质 -> echo '{\"has_substance\":false}' | python D:/claude-ecosystem/config/harness/auto-summary.py\n"
+        "  Tier 2 (manual): 用户明确说了 记住/save/remember ?-> 写入 memory/*.md\n"
+        "  SkillOpt: 本轮有 skill 漏报/误报 ?-> 写入 skill-feedback/feedback.md"
     )
 
 if ma_feedback:
     reminders.append(
         f"[MultiAgentOpt] Detected {ma_feedback} feedback.\n"
-        f"  Record to $HARNESS_ROOT/multiagent-feedback/feedback.md:\n"
+        f"  Record to config/multiagent-feedback/feedback.md:\n"
         f"    ### {ma_feedback.replace('_', ' ').title().replace('False Positive', 'False Positive')}\n"
-        f"    - Task description: ...\n"
-        f"    - {'Reason: user message triggered multiagent but should not have' if ma_feedback == 'false_positive' else 'Expected: user message should have triggered multiagent but was missed'}\n"
-        f"  After 3 accumulated signals, session-start will remind to optimize multiagent-detect scoring rules."
+        f"    - 任务描述: ...\n"
+        f"    - {'原因: 用户消息不该触发但触发了' if ma_feedback == 'false_positive' else '期望: 用户消息本该触发但遗漏了'}\n"
+        f"  累积 3 条后 session-start 将提醒优化 multiagent-detect 评分规则。"
     )
 
 if reminders:
