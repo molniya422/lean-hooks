@@ -1,78 +1,66 @@
 #!/usr/bin/env bash
-# SessionStart injector — heavy mode v6 (unified training loop)
+# SessionStart injector — v2.1 (ML metrics)
+#
 # Injections:
-#   1. MANDATORY startup sequence: search claude-mem-lite + memory index + skill pattern match
-#   2. Unified TrainingLoop threshold alerts (SkillOpt + MultiAgentOpt + ToolCallOpt)
+#   1. MANDATORY startup sequence: search + memory index + skill match
+#   2. Threshold alerts based on EMA F1 / Loss (not raw counts)
 #   3. Backfill hint (one-time)
-# Uses Anaconda python (MINGW64 python3 stub exits 49).
 set -euo pipefail
 
-export PYTHONIOENCODING=utf-8
-export PYTHONUTF8=1
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/env.sh"
 
-PY="D:/jiqixuexi/anaconda/python.exe"
-LOOP_META="D:/claude-ecosystem/config/training-loop/meta.json"
-LEGACY_SKILL_META="D:/claude-ecosystem/config/skill-feedback/meta.json"
-MEMORY_DIR="D:/claude-ecosystem/config/projects/D--claude-ecosystem/memory"
+META="$CONFIG_DIR/training-loop/meta.json"
 
-# Use unified meta; fall back to legacy skill-feedback if no training-loop yet
-META="${LOOP_META}"
-if [ ! -f "$META" ] && [ -f "$LEGACY_SKILL_META" ]; then
-  META="$LEGACY_SKILL_META"
-fi
-
-if [ ! -f "$META" ]; then
-  echo '{"continue":true,"suppressOutput":true}'
-  exit 0
-fi
-
-META_PATH="$META" MEMORY_DIR="$MEMORY_DIR" LOOP_META="$LOOP_META" "$PY" - <<'PYEOF'
+exec "$PY" - "$META" "$MEMORY_DIR" <<'PYEOF'
 import json, os, re, sys
 
-# -- Read meta (unified or legacy) --
-meta_path = os.environ["META_PATH"]
-loop_meta = os.environ["LOOP_META"]
-try:
-    d = json.loads(open(meta_path, encoding="utf-8").read())
-except Exception:
-    print(json.dumps({"continue": True, "suppressOutput": True}))
-    sys.exit(0)
+meta_path = sys.argv[1]
+memory_dir = sys.argv[2]
 
+def load_meta():
+    try:
+        with open(meta_path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def build_memory_block():
+    index = os.path.join(memory_dir, "MEMORY.md")
+    items = []
+    if os.path.isfile(index):
+        with open(index, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("- ["):
+                    items.append(line.lstrip("- "))
+    details = []
+    for item in items:
+        m = re.match(r'\[([^\]]+)\]\(([^)]+)\)', item)
+        if m:
+            name, fname = m.group(1), m.group(2)
+            filepath = os.path.join(memory_dir, fname)
+            desc = ""
+            if os.path.isfile(filepath):
+                with open(filepath, encoding="utf-8") as f:
+                    content = f.read(1024)
+                fm = re.search(r'^---\s*\n(.*?)\n---', content, re.DOTALL)
+                if fm:
+                    for line in fm.group(1).strip().split('\n'):
+                        kv = line.split(':', 1)
+                        if len(kv) == 2 and kv[0].strip() == 'description':
+                            desc = kv[1].strip()
+            details.append((name, fname, desc))
+    if not details:
+        return "  (no memory files found)"
+    return "\n".join(f"  - {n} ({f}): {d}" for n, f, d in details)
+
+met = load_meta()
 reminders = []
 updated = {}
 
-# -- Injection 1: MANDATORY startup with live memory index --
-memory_dir = os.environ["MEMORY_DIR"]
-mem_index = os.path.join(memory_dir, "MEMORY.md")
-
-memory_items = []
-if os.path.isfile(mem_index):
-    with open(mem_index, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line.startswith("- ["):
-                memory_items.append(line.lstrip("- "))
-
-memory_details = []
-for item in memory_items:
-    m = re.match(r'\[([^\]]+)\]\(([^)]+)\)', item)
-    if m:
-        name, filename = m.group(1), m.group(2)
-        filepath = os.path.join(memory_dir, filename)
-        desc = ""
-        if os.path.isfile(filepath):
-            with open(filepath, encoding="utf-8") as f:
-                content = f.read(1024)
-            fm = re.match(r'^---\s*\n(.*?)\n---', content, re.DOTALL)
-            if fm:
-                for line in fm.group(1).strip().split('\n'):
-                    kv = line.split(':', 1)
-                    if len(kv) == 2 and kv[0].strip() == 'description':
-                        desc = kv[1].strip()
-        memory_details.append((name, filename, desc))
-
-memory_block = "\n".join(f"  - {n} ({f}): {d}" for n, f, d in memory_details) if memory_details else "  (no memory files found)"
-
+# --- Injection 1: MANDATORY startup ---
+mem_block = build_memory_block()
 startup = (
     "[MANDATORY - BLOCKING STARTUP CHECKLIST - DO NOT SKIP]\n"
     "Execute ALL three steps before ANY response or tool call:\n\n"
@@ -80,7 +68,7 @@ startup = (
     '  mcp__mem-search-lite__search(query="<describe this task in 3-5 words>", limit=5)\n'
     "  This prevents repeating work already done.\n\n"
     "STEP 2 - Read relevant memory files. Available:\n"
-    f"{memory_block}\n\n"
+    f"{mem_block}\n\n"
     "  If this task involves any topic above, Read that file NOW.\n\n"
     "STEP 3 - Match skill by task pattern. Scan the user's request for these signals:\n"
     "  bug/error/fail/crash -> systematic-debugging\n"
@@ -101,76 +89,66 @@ startup = (
 )
 reminders.append(startup)
 
-# -- Injection 2: Unified TrainingLoop threshold (all 3 dimensions) --
-# Try unified meta first (v2), fall back to legacy format (v1)
-dims = None
-if os.path.isfile(loop_meta):
-    try:
-        unified = json.loads(open(loop_meta, encoding="utf-8").read())
-        dims = unified.get("dimensions", {})
-    except Exception:
-        pass
-
-alerts = []
-
-if dims:
-    # --- Unified format (v2) ---
-    for dim_key, dim_name, fmt in [
-        ("skill", "SkillOpt", "trigger rules in CLAUDE.md"),
-        ("multiagent", "MultiAgentOpt", "multiagent-detect scoring rules"),
-        ("toolcall", "ToolCallOpt", "tool call patterns in training-loop/feedback.md"),
-    ]:
-        dim = dims.get(dim_key, {})
-        total = dim.get("total", dim.get("misses", 0) + dim.get("false_positives", 0) + dim.get("observations", 0))
-        threshold = dim.get("threshold", 3)
-        if total >= threshold:
-            alerts.append(f"[{dim_name}] {total}/{threshold} — review {fmt}")
-else:
-    # --- Legacy format (v1) — three separate meta files ---
-    misses = d.get("misses", 0)
-    fps = d.get("false_positives", 0)
-    total = d.get("total_feedback_entries", misses + fps)
-    threshold = d.get("threshold", 3)
+# --- Injection 2: v2.1 EMA-based threshold alerts ---
+if met.get("version") == "2.1":
+    global_cfg = met.get("global", {})
+    f1_target = global_cfg.get("f1_target", 0.75)
+    dims = met.get("dimensions", {})
+    alerts = []
+    for key, label in [("skill", "SkillOpt"), ("multiagent", "MultiAgentOpt"), ("toolcall", "ToolCallOpt")]:
+        dim = dims.get(key, {})
+        ema = dim.get("ema", {})
+        metrics = dim.get("metrics", {})
+        loss = dim.get("loss", {})
+        f1 = ema.get("f1")  # use ema_f1 as primary signal
+        if f1 is None:
+            # cold start: use point metrics
+            f1 = metrics.get("f1", 1.0)
+        if f1 < f1_target:
+            p = ema.get("precision") or metrics.get("precision", 0)
+            r = ema.get("recall") or metrics.get("recall", 0)
+            l_core = loss.get("core", 0)
+            l_total = loss.get("total", 0)
+            counts = dim.get("counts", {})
+            tp, fp, fn = counts.get("tp", 0), counts.get("fp", 0), counts.get("fn", 0)
+            alerts.append(
+                f"[{label}] F1={f1:.3f} (target={f1_target}) "
+                f"EMA(P={p:.3f}/R={r:.3f}) L_core={l_core:.3f} "
+                f"TP={tp} FP={fp} FN={fn} -> review required"
+            )
+    if alerts:
+        reminders.append(
+            "[TrainingLoop] v2.1 EMA 阈值告警 (F1 低于目标):\n"
+            + "\n".join(f"  {a}" for a in alerts)
+            + "\n\n  反馈入口: training-loop/feedback.md (按 ## SkillOpt / ## MultiAgentOpt / ## ToolCallOpt 分区)\n"
+            "  运算器: python training-loop/adaptive-threshold.py --adjust"
+        )
+elif met:
+    # Legacy fallback — simple counts
+    misses = met.get("misses", 0)
+    fps = met.get("false_positives", 0)
+    total = met.get("total_feedback_entries", misses + fps)
+    threshold = met.get("threshold", 3)
     if total >= threshold:
-        alerts.append(f"[SkillOpt] {total}/{threshold} (m={misses} fp={fps}) — review trigger rules")
+        reminders.append(
+            f"[SkillOpt] {total}/{threshold} (m={misses} fp={fps}) — review trigger rules"
+        )
 
-    ma_meta_path = "D:/claude-ecosystem/config/multiagent-feedback/meta.json"
-    try:
-        ma = json.loads(open(ma_meta_path, encoding="utf-8").read())
-        ma_total = ma.get("total_feedback_entries", ma.get("misses", 0) + ma.get("false_positives", 0))
-        if ma_total >= ma.get("threshold", 3):
-            alerts.append(f"[MultiAgentOpt] {ma_total}/{ma.get('threshold', 3)} — review scoring rules")
-    except Exception:
-        pass
-
-    tc_meta_path = "D:/claude-ecosystem/config/toolcall-feedback/meta.json"
-    try:
-        tc = json.loads(open(tc_meta_path, encoding="utf-8").read())
-        tc_obs = tc.get("observations", 0)
-        if tc_obs >= tc.get("threshold", 3):
-            alerts.append(f"[ToolCallOpt] {tc_obs}/{tc.get('threshold', 3)} — review tool call patterns")
-    except Exception:
-        pass
-
-if alerts:
-    reminders.append("[TrainingLoop] 统一训练系统阈值告警:\n" + "\n".join(f"  {a}" for a in alerts) +
-        "\n\n  反馈入口: training-loop/feedback.md (统一文件，按 ## SkillOpt / ## MultiAgentOpt / ## ToolCallOpt 分区)")
-
-# -- Injection 3: Backfill hint (one-time) --
-backfill_shown = d.get("backfill_hint_shown", False)
-if not backfill_shown:
+# --- Injection 3: Backfill hint (one-time) ---
+if not met.get("backfill_hint_shown", False):
     reminders.append(
         "[Backfill Hint] Use /summarize --backfill or mem-search-lite to "
         "catch up on past sessions lacking memory. One-time notice."
     )
     updated["backfill_hint_shown"] = True
 
-# -- Injection 4: Hooks control hint + project type detection --
+# --- Injection 4: Hooks control ---
 reminders.append(
     "[Hooks Control] Temporarily disable hooks via: "
-    'export DISABLED_HOOKS="multiagent-detect" (comma-separated, e.g. "multiagent-detect,post-task-detect")'
+    'export DISABLED_HOOKS="multiagent-detect" (comma-separated)'
 )
 
+# --- Injection 5: Project type detection ---
 root = os.getcwd()
 detected = []
 if os.path.isfile(os.path.join(root, "Cargo.toml")):
@@ -185,14 +163,14 @@ if detected:
         "Language-specific rules in config/rules/ (framework reserved for v2)."
     )
 
-# -- Persist meta updates --
-if updated:
+# Persist backfill hint
+if updated and met:
     for k, v in updated.items():
-        d[k] = v
+        met[k] = v
     with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump(d, f, indent=2, ensure_ascii=False)
+        json.dump(met, f, indent=2, ensure_ascii=False)
 
-# -- Output --
+# --- Output ---
 if reminders:
     combined = "\n\n".join(reminders)
     out = {

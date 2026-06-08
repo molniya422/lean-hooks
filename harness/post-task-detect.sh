@@ -3,14 +3,15 @@
 # Heavy mode v2: detects completion signals in user prompt and injects a
 # reminder to AI context. The AI still judges whether to actually write
 # memory / record feedback (per CLAUDE.md §6.1 + §6.2).
-# Uses Anaconda python explicitly (MINGW64 python3 stub exits 49).
+# Sources env.sh for Python detection (respects HARNESS_PYTHON override).
 # Sets PYTHONIOENCODING=utf-8 to keep JSON output valid UTF-8.
 set -euo pipefail
 
 export PYTHONIOENCODING=utf-8
 export PYTHONUTF8=1
 
-PY="D:/jiqixuexi/anaconda/python.exe"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/env.sh"
 
 INPUT=$(cat)
 
@@ -207,8 +208,8 @@ if completion:
     reminders.append(
         "[Post-Task Hook] 任务完成。执行三层写入检查:\n"
         "  Tier 1 (auto): 本轮有实质操作(Edit/Write/Bash/修复/部署)有?\n"
-        "   有 -> echo '{\"project\":\"...\",\"summary\":\"...\",\"files\":\"...\"}' | python D:/claude-ecosystem/config/harness/auto-summary.py\n"
-        "    纯聊天/无实质 -> echo '{\"has_substance\":false}' | python D:/claude-ecosystem/config/harness/auto-summary.py\n"
+        "   有 -> echo '{\"project\":\"...\",\"summary\":\"...\",\"files\":\"...\"}' | python3 config/harness/auto-summary.py\n"
+        "    纯聊天/无实质 -> echo '{\"has_substance\":false}' | python3 config/harness/auto-summary.py\n"
         "  Tier 2 (manual): 用户明确说了 记住/save/remember ?-> 写入 memory/*.md\n"
         "  TrainingLoop: 本轮行为质量有值得记录的？→ 写入 training-loop/feedback.md\n"
         "    ## SkillOpt: skill 触发准确/误报？\n"

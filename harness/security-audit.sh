@@ -4,10 +4,11 @@
 # Checks: .env exposure, plaintext API keys, harness permissions.
 set -euo pipefail
 
-ECOSYSTEM="D:/claude-ecosystem"
-CLAUDE_MD="$ECOSYSTEM/config/CLAUDE.md"
-SETTINGS_JSON="$ECOSYSTEM/config/settings.json"
-HARNESS_DIR="$ECOSYSTEM/config/harness"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/env.sh"
+
+CLAUDE_MD="$CONFIG_DIR/CLAUDE.md"
+SETTINGS_JSON="$CONFIG_DIR/settings.json"
 CWD=$(pwd)
 
 PASS=0
@@ -59,7 +60,7 @@ fi
 echo ""
 
 # 3. Harness script permissions
-for s in health-check.sh skillopt-collect.sh post-task-detect.sh session-start-inject.sh multiagent-detect.sh security-audit.sh; do
+for s in health-check.sh training-collect.sh post-task-detect.sh session-start-inject.sh multiagent-detect.sh security-audit.sh; do
     f="$HARNESS_DIR/$s"
     if [ -x "$f" ]; then
         PASS=$((PASS+1))

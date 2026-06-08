@@ -91,16 +91,33 @@ Three training dimensions share one unified feedback system at `training-loop/`:
 
 **Tier 2 (manual): Structured Memory.** Only when user explicitly says "记住" / "remember this". Write to `memory/` directory.
 
-### 6.2 TrainingLoop — Unified Feedback System
+### 6.2 TrainingLoop — Unified Behavioral Quality System
+
+Three training dimensions share one structured feedback system at `training-loop/`:
+
+| Dimension | Focus | Feedback Format |
+|---|---|---|
+| SkillOpt | Skill trigger accuracy | `### Miss` / `### False Positive` |
+| MultiAgentOpt | Agent dispatch accuracy | `### Miss` / `### False Positive` |
+| ToolCallOpt | Tool call pattern quality | `### Positive` / `### Negative` |
+
+All three write to the same `training-loop/feedback.md` under their respective `##` sections. A single `meta.json` tracks all counters.
 
 **Workflow:**
-1. `training-collect.sh` (Stop hook) syncs all 3 dimensions to unified meta.json
+1. `training-collect.sh` (Stop hook) syncs counters to unified meta.json
 2. `session-start-inject.sh` reads unified meta → single threshold alert block
-3. `post-task-detect.sh` prompts TrainingLoop reflection on completion
-4. All feedback writes to `training-loop/feedback.md` (one file, three ## sections)
-5. At 3 signals per dimension, SessionStart injects alert
+3. `post-task-detect.sh` prompts unified TrainingLoop reflection on completion
 
-**Explicit triggers:** Say "skill miss"/"skill false positive", "multiagent miss"/"multiagent fp", "toolcall observation" to record.
+**Collect signals:**
+- Misses: A skill/multiagent should have triggered but didn't
+- False positives: A trigger fired but was irrelevant
+- ToolCall observations: Positive (reinforce) or Negative (correct)
+
+**Metrics**: Every Stop hook computes Precision / Recall / F1 per dimension, with EMA smoothing (λ=0.1818, ~10-session memory). A core loss function L = [(1-P)² + (1-R)²] / [(1-P)+(1-R)+ε] + γ·complexity_penalty drives adaptive threshold adjustment when F1 < 0.75 over ≥3 sessions. See `training-loop/metrics-design.md` for full formulas.
+
+**Adaptive adjustment**: When EMA F1 falls below target, the system auto-tightens (P < R) or loosens (P ≥ R) multiagent trigger thresholds in `multiagent-detect.sh`.
+
+**Feedback file**: `training-loop/feedback.md`
 
 ### 6.3 Multi-Agent Detection (multiagent-detect.sh)
 
@@ -120,7 +137,7 @@ Two-phase heuristic scoring system detects complex tasks and suggests parallel a
 | SessionStart | `session-start-inject.sh` | Injects memory index + 3-step checklist |
 | UserPromptSubmit | `multiagent-detect.sh` | Detects complex tasks → parallel agent suggestion |
 | UserPromptSubmit | `post-task-detect.sh` | Detects completion → write reminders |
-| Stop | `skillopt-collect.sh` | Syncs feedback counters → threshold alerts |
+| Stop | `training-collect.sh` | Syncs feedback counters → unified meta.json with EMA/F1 metrics |
 | (on-demand) | `auto-summary.py` | Writes 1-line session log to SQLite |
 
 **DISABLED_HOOKS**: Temporarily disable hooks via `export DISABLED_HOOKS="multiagent-detect,post-task-detect"`.

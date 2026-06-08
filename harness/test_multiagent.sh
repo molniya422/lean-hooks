@@ -2,8 +2,11 @@
 # Test script for multiagent-detect.sh
 set -euo pipefail
 
-PY="D:/jiqixuexi/anaconda/python.exe"
-SCRIPT="D:/claude-ecosystem/config/harness/multiagent-detect.sh"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/env.sh"
+
+PY="${PY:-python3}"
+SCRIPT="$SCRIPT_DIR/multiagent-detect.sh"
 
 trigger_tests=(
     '帮我并行审查这3个文件'

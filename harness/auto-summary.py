@@ -5,13 +5,14 @@ Reads a JSON record from stdin (or --summary/-s/-p/-f flags) and writes a
 lightweight session log row to the claude-mem SQLite database. The
 mem-search-lite MCP can then search these logs.
 
-Auto-detects DB path from CLAUDE_MEM_DATA_DIR, or defaults to
-D:/claude-ecosystem/data/claude-mem/claude-mem.db.
+Auto-detects DB path from CLAUDE_MEM_DATA_DIR, or falls back to:
+  - <HARNESS_ROOT>/data/claude-mem/claude-mem.db (lean-hooks)
+  - <HARNESS_ROOT>/data/claude-mem/claude-mem.db (claude-ecosystem, HARNESS_ROOT is project root)
 
 Usage:
   echo '{"project":"foo","summary":"fixed login bug","files":"auth.ts,login.tsx","has_substance":true}' | python auto-summary.py
   python auto-summary.py -p foo -s "fixed login bug" -f "auth.ts,login.tsx"
-  python auto-summary.py --has-substance false   # skip signal: the AI decided no substance
+  python auto-summary.py --has-substance false   # skip signal
 """
 
 import json
@@ -23,12 +24,26 @@ from datetime import datetime, timezone
 
 def find_db():
     data_dir = os.environ.get("CLAUDE_MEM_DATA_DIR")
-    if not data_dir:
-        # Fallback to claude-ecosystem structure
-        candidate = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "..", "..", "data", "claude-mem"
-        )
+    if data_dir:
+        return os.path.join(data_dir, "claude-mem.db")
+
+    harness_root = os.environ.get("HARNESS_ROOT")
+    if harness_root:
+        candidate = os.path.join(harness_root, "data", "claude-mem")
         data_dir = os.path.abspath(candidate)
+        return os.path.join(data_dir, "claude-mem.db")
+
+    # Fallback: auto-detect layout from script location
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # If harness is under config/harness/ (claude-ecosystem) or harness/ (lean-hooks)
+    parent = os.path.dirname(script_dir)
+    if os.path.basename(parent) == "config":
+        # claude-ecosystem: script_dir = config/harness, project root = grandparent
+        root = os.path.dirname(parent)
+    else:
+        # lean-hooks: script_dir = harness, project root = parent
+        root = parent
+    data_dir = os.path.abspath(os.path.join(root, "data", "claude-mem"))
     return os.path.join(data_dir, "claude-mem.db")
 
 

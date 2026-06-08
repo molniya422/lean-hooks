@@ -10,11 +10,14 @@ set -euo pipefail
 export PYTHONIOENCODING=utf-8
 export PYTHONUTF8=1
 
-PY="D:/jiqixuexi/anaconda/python.exe"
-META="D:/claude-ecosystem/config/skill-feedback/meta.json"
-FEEDBACK="D:/claude-ecosystem/config/skill-feedback/feedback.md"
-MULTIAGENT_META="D:/claude-ecosystem/config/multiagent-feedback/meta.json"
-MULTIAGENT_FEEDBACK="D:/claude-ecosystem/config/multiagent-feedback/feedback.md"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/env.sh"
+
+PY="${PY:-python3}"
+META="$HARNESS_ROOT/skill-feedback/meta.json"
+FEEDBACK="$HARNESS_ROOT/skill-feedback/feedback.md"
+MULTIAGENT_META="$HARNESS_ROOT/multiagent-feedback/meta.json"
+MULTIAGENT_FEEDBACK="$HARNESS_ROOT/multiagent-feedback/feedback.md"
 THRESHOLD=5
 MA_THRESHOLD=3
 
