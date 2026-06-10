@@ -15,6 +15,19 @@
 
 set -euo pipefail
 
+# Ensure we have Python for inline scripting (needed by error-handler)
+_py_detect() {
+    if [ -n "${HARNESS_PYTHON:-}" ]; then
+        echo "$HARNESS_PYTHON"
+    elif command -v python3 &>/dev/null; then
+        echo "python3"
+    elif command -v python &>/dev/null; then
+        echo "python"
+    else
+        echo ""
+    fi
+}
+
 _resolve_path() {
     local base="$1" rel="$2"
     local p="$base/$rel"
@@ -114,6 +127,18 @@ if [ -f "$GITIGNORED_ENV" ]; then
     source "$GITIGNORED_ENV"
 fi
 
+# --- Load lean-hooks.toml configuration ---
+# Priority: project-level > global (~/.claude)
+_LOADED_HOOKS_CFG=""
+if [ -f "$CONFIG_DIR/lean-hooks.toml" ]; then
+    _LOADED_HOOKS_CFG="$CONFIG_DIR/lean-hooks.toml"
+elif [ -f "$HARNESS_ROOT/lean-hooks.toml" ]; then
+    _LOADED_HOOKS_CFG="$HARNESS_ROOT/lean-hooks.toml"
+elif [ -f "$HOME/.claude/lean-hooks.toml" ]; then
+    _LOADED_HOOKS_CFG="$HOME/.claude/lean-hooks.toml"
+fi
+export _LOADED_HOOKS_CFG
+
 if [ -z "${CHROME_EXE:-}" ]; then
     CHROME_EXE="D:/Chromium/Application/chrome.exe"
 fi
@@ -126,3 +151,9 @@ fi
 # --- Export all for child scripts ---
 export PY HARNESS_ROOT CONFIG_DIR LOOP_DIR MEMORY_DIR HARNESS_DIR CLAUDE_MD ECOSYSTEM
 export CHROME_EXE AGENT_BROWSER_BIN
+
+# --- Source error handler (timeout_wrap, error_log, safe_run) ---
+ERROR_HANDLER="$SCRIPT_DIR/error-handler.sh"
+if [ -f "$ERROR_HANDLER" ]; then
+    source "$ERROR_HANDLER"
+fi

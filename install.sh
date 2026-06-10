@@ -17,6 +17,8 @@ mkdir -p "$TARGET/rules"
 mkdir -p "$TARGET/memory"
 mkdir -p "$TARGET/projects"
 mkdir -p "$TARGET/data"
+mkdir -p "$TARGET/hooks"           # plugin directory
+mkdir -p "$TARGET/archive"         # rotated data
 
 # Copy harness scripts
 echo "[1/4] Installing harness scripts..."
@@ -32,6 +34,20 @@ cp "$SOURCE/templates/multiagent-feedback/"*.json "$TARGET/multiagent-feedback/"
 cp "$SOURCE/templates/multiagent-feedback/"*.md "$TARGET/multiagent-feedback/" 2>/dev/null || true
 cp "$SOURCE/templates/rules/"*.md "$TARGET/rules/" 2>/dev/null || true
 cp "$SOURCE/templates/memory/"*.md "$TARGET/memory/" 2>/dev/null || true
+
+# Copy lean-hooks.toml (don't overwrite existing)
+if [ ! -f "$TARGET/lean-hooks.toml" ]; then
+    cp "$SOURCE/lean-hooks.toml" "$TARGET/lean-hooks.toml"
+    echo "  Created lean-hooks.toml from template"
+else
+    echo "  lean-hooks.toml already exists — merge manually"
+fi
+
+# Copy example plugin
+if [ -d "$SOURCE/hooks" ]; then
+    cp "$SOURCE/hooks/"*.sh "$TARGET/hooks/" 2>/dev/null || true
+    echo "  Copied example plugins"
+fi
 
 # Copy settings template (don't overwrite existing)
 echo "[3/4] Setting up config files..."

@@ -1,16 +1,26 @@
 #!/usr/bin/env bash
 # SessionStart injector — v2.1 (ML metrics)
 #
-# Injections:
+# Injection Sequence (all use safe_run for timeout+error handling):
 #   1. MANDATORY startup sequence: search + memory index + skill match
 #   2. Threshold alerts based on EMA F1 / Loss (not raw counts)
 #   3. Backfill hint (one-time)
+#   4. Hooks control reminder
+#   5. Project type detection
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/env.sh"
 
+# safe_run wraps this entire script — see error-handler.sh
+
 META="$CONFIG_DIR/training-loop/meta.json"
+
+# Check if hook is disabled
+if ! is_hook_enabled "session-start-inject" 2>/dev/null; then
+    echo "[lean-hooks] session-start-inject disabled, skipping" >&2
+    exit 0
+fi
 
 exec "$PY" - "$META" "$MEMORY_DIR" <<'PYEOF'
 import json, os, re, sys

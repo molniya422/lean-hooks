@@ -81,15 +81,17 @@ Three training dimensions share one unified feedback system at `training-loop/`:
 
 | Dimension | Focus | Feedback Format |
 |---|---|---|
-| SkillOpt | Skill trigger accuracy | `### Miss` / `### False Positive` |
-| MultiAgentOpt | Agent dispatch accuracy | `### Miss` / `### False Positive` |
-| ToolCallOpt | Tool call pattern quality | `### Positive` / `### Negative` |
+| SkillOpt | Skill trigger accuracy | `### Correct Trigger` / `### Miss` / `### False Positive` |
+| MultiAgentOpt | Agent dispatch accuracy | `### Correct Trigger` / `### Miss` / `### False Positive` |
+| ToolCallOpt | Tool call pattern quality | `### Positive` / `### Missed Opportunity` / `### Negative` |
 
 ### 6.1 Memory System — Two-Tier Write Architecture
 
 **Tier 1 (auto): Session Log.** Every session with substantive work gets a 1-line log in SQLite.
 
 **Tier 2 (manual): Structured Memory.** Only when user explicitly says "记住" / "remember this". Write to `memory/` directory.
+
+**Lifecycle**: `data-lifecycle.py` auto-rotates MEMORY.md (>64KB) and archives sessions (>90 days).
 
 ### 6.2 TrainingLoop — Unified Behavioral Quality System
 
@@ -115,6 +117,8 @@ All three write to the same `training-loop/feedback.md` under their respective `
 
 **Metrics**: Every Stop hook computes Precision / Recall / F1 per dimension, with EMA smoothing (λ=0.1818, ~10-session memory). A core loss function L = [(1-P)² + (1-R)²] / [(1-P)+(1-R)+ε] + γ·complexity_penalty drives adaptive threshold adjustment when F1 < 0.75 over ≥3 sessions. See `training-loop/metrics-design.md` for full formulas.
 
+**Enhanced Scoring**: `weighted-scoring.py` adds time-decay weights, trend analysis, and confidence scoring on top of raw F1. Run manually or integrate into Stop hook.
+
 **Adaptive adjustment**: When EMA F1 falls below target, the system auto-tightens (P < R) or loosens (P ≥ R) multiagent trigger thresholds in `multiagent-detect.sh`.
 
 **Feedback file**: `training-loop/feedback.md`
@@ -125,6 +129,7 @@ Two-phase heuristic scoring system detects complex tasks and suggests parallel a
 
 - **Phase 1**: Fast keyword/pattern matching (filters ~95% chat, zero cost)
 - **Phase 2**: Structural analysis (task verbs, file refs, tech boundaries)
+- `--dry-run` mode for scoring visualization: `echo '{"prompt":"..."}' | bash harness/multiagent-detect.sh --dry-run`
 - Soft suggestion only — AI decides whether to dispatch.
 - Feedback via "multiagent miss" / "multiagent false positive".
 
@@ -139,5 +144,11 @@ Two-phase heuristic scoring system detects complex tasks and suggests parallel a
 | UserPromptSubmit | `post-task-detect.sh` | Detects completion → write reminders |
 | Stop | `training-collect.sh` | Syncs feedback counters → unified meta.json with EMA/F1 metrics |
 | (on-demand) | `auto-summary.py` | Writes 1-line session log to SQLite |
+| (on-demand) | `data-lifecycle.py` | Rotates MEMORY.md, archives old sessions, prunes ERRORS.md |
+| (on-demand) | `stats.py` | Query CLI: sessions, hooks, skills, multiagent, trends |
+| (on-demand) | `test_all.py` | Integration test suite |
 
+**Config**: `lean-hooks.toml` for per-hook granular control (enabled, timeout, events, per-project).
+**Plugin system**: `hooks/*.sh` auto-registered by `plugin-loader.sh` with priority ordering.
+**Error handling**: All hooks wrapped with `error-handler.sh` (timeout + error_log to ERRORS.md, non-blocking).
 **DISABLED_HOOKS**: Temporarily disable hooks via `export DISABLED_HOOKS="multiagent-detect,post-task-detect"`.

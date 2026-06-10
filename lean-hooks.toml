@@ -1,0 +1,62 @@
+# lean-hooks configuration
+# Granular hook control with per-event-type, per-project, and env-condition support.
+# This file is auto-detected as $HARNESS_ROOT/lean-hooks.toml (project-level)
+# or ~/.claude/lean-hooks.toml (global, lower priority).
+
+# Valid event types: SessionStart, UserPromptSubmit, Stop
+
+[global]
+# Default timeout per hook (seconds). Individual hooks can override.
+default_timeout = 30
+# Data directory for logs, archives
+data_dir = "data"
+
+[[hook]]
+name = "health-check"
+file = "harness/health-check.sh"
+events = ["SessionStart"]
+timeout = 15
+# Enable/disable this hook entirely
+enabled = true
+
+[[hook]]
+name = "security-audit"
+file = "harness/security-audit.sh"
+events = ["SessionStart"]
+timeout = 10
+enabled = true
+
+[[hook]]
+name = "session-start-inject"
+file = "harness/session-start-inject.sh"
+events = ["SessionStart"]
+timeout = 10
+enabled = true
+
+[[hook]]
+name = "post-task-detect"
+file = "harness/post-task-detect.sh"
+events = ["UserPromptSubmit"]
+timeout = 10
+enabled = true
+
+[[hook]]
+name = "multiagent-detect"
+file = "harness/multiagent-detect.sh"
+events = ["UserPromptSubmit"]
+timeout = 15
+enabled = true
+
+[[hook]]
+name = "training-collect"
+file = "harness/training-collect.sh"
+events = ["Stop"]
+timeout = 10
+enabled = true
+
+# Per-project overrides: set project_name via env PROJECT_NAME or auto-detected
+# [project."my-project"]
+# disabled_hooks = ["multiagent-detect"]
+#
+# [project."my-project".override."multiagent-detect"]
+# timeout = 30

@@ -8,7 +8,7 @@ Write-Host "=== lean-hooks Installer (Windows) ==="
 Write-Host "Target: $Target"
 
 # Create directories
-$dirs = @("harness", "skill-feedback", "multiagent-feedback", "rules", "memory", "projects", "data")
+$dirs = @("harness", "skill-feedback", "multiagent-feedback", "rules", "memory", "projects", "data", "hooks", "archive")
 foreach ($d in $dirs) {
     New-Item -ItemType Directory -Force -Path "$Target\$d" | Out-Null
 }
@@ -26,7 +26,11 @@ Copy-Item "$Source\templates\rules\*" "$Target\rules\" -Force -ErrorAction Silen
 Copy-Item "$Source\templates\memory\*" "$Target\memory\" -Force -ErrorAction SilentlyContinue
 
 # Config files
-Write-Host "[3/3] Setting up config..."
+Write-Host "[3/4] Setting up config..."
+if (-not (Test-Path "$Target\lean-hooks.toml")) {
+    Copy-Item "$Source\lean-hooks.toml" "$Target\lean-hooks.toml"
+    Write-Host "  Created lean-hooks.toml from template"
+}
 if (-not (Test-Path "$Target\settings.json")) {
     Copy-Item "$Source\settings.template.json" "$Target\settings.json"
     Write-Host "  Created settings.json from template"
@@ -40,7 +44,17 @@ if (-not (Test-Path "$Target\CLAUDE.md")) {
     Write-Host "  CLAUDE.md exists - merge manually"
 }
 
-Write-Host ""
-Write-Host "=== Done ==="
-Write-Host "Set HARNESS_PYTHON env var if Python is not auto-detected."
-Write-Host "Restart Claude Code to activate hooks."
+# Copy example plugins
+if (Test-Path "$Source\hooks") {
+    Copy-Item "$Source\hooks\*.sh" "$Target\hooks\" -Force -ErrorAction SilentlyContinue
+    Write-Host "  Copied example plugins"
+}
+
+Write-Host "[4/4] Veriving..."
+$Py = if (Get-Command python3 -ErrorAction SilentlyContinue) { "python3" } else { "python" }
+try {
+    $ver = & $Py --version 2>&1
+    Write-Host "  Python found: $ver"
+} catch {
+    Write-Host "  WARNING: Python not found. Set HARNESS_PYTHON env var."
+}
