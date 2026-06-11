@@ -17,16 +17,33 @@ source "$SCRIPT_DIR/env.sh"
 META="$CONFIG_DIR/training-loop/meta.json"
 
 # Check if hook is disabled
+# Check if hook is disabled
 if ! is_hook_enabled "session-start-inject" 2>/dev/null; then
     echo "[lean-hooks] session-start-inject disabled, skipping" >&2
     exit 0
 fi
 
-exec "$PY" - "$META" "$MEMORY_DIR" <<'PYEOF'
-import json, os, re, sys
+# --- Collect plugin output before exec (to inject into context) ---
+plugin_context=""
+if [ -f "$SCRIPT_DIR/plugin-loader.sh" ]; then
+    plugin_context=$(source "$SCRIPT_DIR/plugin-loader.sh" 2>/dev/null && run_plugins "SessionStart" 2>&1 || true)
+fi
+
+exec "$PY" - "$META" "$MEMORY_DIR" "$plugin_context" "$HARNESS_ROOT" <<'PYEOF'
+import json, os, re, sys, time
 
 meta_path = sys.argv[1]
 memory_dir = sys.argv[2]
+plugin_context = sys.argv[3] if len(sys.argv) > 3 else ""
+harness_root = sys.argv[4] if len(sys.argv) > 4 else os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# --- Reset multiagent session state on every SessionStart ---
+STATE_FILE = os.path.join(harness_root, "data", "multiagent_session_state.json")
+try:
+    if os.path.exists(STATE_FILE):
+        os.remove(STATE_FILE)
+except Exception:
+    pass
 
 def load_meta():
     try:
@@ -171,6 +188,12 @@ if detected:
     reminders.append(
         f"[Project Type] Detected: {', '.join(detected)}. "
         "Language-specific rules in config/rules/ (framework reserved for v2)."
+    )
+
+# --- Injection 6: Plugin outputs ---
+if plugin_context.strip():
+    reminders.append(
+        "[Plugin Output]\n" + plugin_context.strip()
     )
 
 # Persist backfill hint

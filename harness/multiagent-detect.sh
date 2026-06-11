@@ -101,6 +101,84 @@ import json
 import os
 import re
 import sys
+import time
+
+# --- Session-level state machine ---
+STATE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
+os.makedirs(STATE_DIR, exist_ok=True)
+STATE_FILE = os.path.join(STATE_DIR, "multiagent_session_state.json")
+
+SESSION_IDLE_TIMEOUT_SECONDS = 300  # 5 min without interaction = reset
+
+def load_state():
+    try:
+        with open(STATE_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {"state": "idle", "task_context": "", "last_prompt_start": 0}
+
+def save_state(s):
+    s["last_prompt_start"] = time.time()
+    try:
+        with open(STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump(s, f, indent=2)
+    except Exception:
+        pass
+
+def reset_state(reason="idle"):
+    return {"state": "idle", "task_context": "", "last_prompt_start": 0}
+
+def extract_keywords(text_lower):
+    return set(re.findall(r'\b[\w一-鿿]{2,}\b', text_lower))
+
+def detect_continuation(state, text_lower):
+    """Returns (is_continuation, reason_str, penalty_score)"""
+    if state.get("state") == "idle":
+        return False, "idle", 0
+
+    # Idle timeout?
+    last_time = state.get("last_prompt_start", 0)
+    if last_time and (time.time() - last_time) > SESSION_IDLE_TIMEOUT_SECONDS:
+        return False, "idle_timeout", 0
+
+    # --- Layer 1: explicit continuation markers (Chinese + English) ---
+    continuation_markers = [
+        (r'^(这个|那个|它|刚才的|之前的|上面的)\b', 'pronoun_reference'),
+        (r'^(能不能|能不能把|能不能再|能不能给我|能否|可否|要不|改成|换成|改为)\b', 'request_retry'),
+        (r'^(还有|另外|对了|那|然后|接着|继续|下一步|然后呢)\b', 'continuation_word'),
+        (r'^(为什么|怎么|怎么没|是不是|有没有|对吗|对吗\?|为何|如何)\b', 'question'),
+        (r'^(改一下|修一下|换一下|保存|重启|删了|去掉|加上|添加)\b', 'imperative_no_subject'),
+        (r'^(继续|接着来|下一步|然后呢|ok|好的|对|收到|搞定|完成)\b$', 'one_word_continuation'),
+        (r'^不错|^可以|^行|^好|^嗯|^哦', 'affirmation'),
+    ]
+    for pattern, reason in continuation_markers:
+        if re.search(pattern, text_lower):
+            return True, reason, -3
+
+    # --- Layer 2: keyword overlap with active task context ---
+    prev_kw = state.get("task_keywords", [])
+    if prev_kw:
+        curr_kw = extract_keywords(text_lower)
+        prev_set = set(prev_kw)
+        overlap = prev_set & curr_kw if curr_kw else set()
+        if prev_set and len(overlap) / len(prev_set) > 0.5:
+            return True, f"keyword_overlap_{len(overlap)/len(prev_set):.0%}", -2
+
+    # --- Layer 3: follow-up question patterns ---
+    followups = [r'\?$', r'^(那|所以|然后呢|那接下来|接下来|之后)']
+    for pat in followups:
+        if re.search(pat, text_lower):
+            return True, "followup_question", -1
+
+    return False, "new_task_or_unclear", 0
+
+def update_state(state, prompt, will_dispatch):
+    if will_dispatch:
+        state["state"] = "task_active"
+        state["task_context"] = prompt[:200]
+        state["task_keywords"] = list(extract_keywords(prompt.lower()))[:20]
+    save_state(state)
+
 
 # --- CONFIGURATION ---
 ENABLE_PHASE_2 = True  # v1: Heuristic fallback enabled. Set False for Phase 1 only.
@@ -179,17 +257,47 @@ def phase2_heuristic(text, text_lower, score, reasons):
 def phase2_llm_classifier(text):
     return None
 
-def build_suggestion(score, reasons, text):
-    lines = [
-        "[MultiAgent Hook] This message looks like it contains multiple independent tasks.",
-        f"Score: {score} | Reasons: {', '.join(reasons)}",
-        "Consider dispatching parallel agents:",
-        "  Agent A: [task 1] -> do X",
-        "  Agent B: [task 2] -> do Y",
-        "  Then: synthesize results",
-        "",
-        "If this assessment is wrong, say 'multiagent false positive' to help improve the heuristic.",
-    ]
+# --- Force trigger: explicit user request for parallel agents ---
+FORCE_PATTERNS = [
+    r"并行执行",
+    r"拆分成子任务",
+    r"拆分.*并行",
+    r"同时.*多个任务",
+    r"分成.*agent",
+    r"强制.*multiagent",
+    r"force.*multiagent",
+    r"dispatch.*parallel",
+    r"parallel.*agents?",
+    r"多个.*并行",
+]
+
+def is_force_trigger(text_lower):
+    for pat in FORCE_PATTERNS:
+        if re.search(pat, text_lower):
+            return pat
+    return None
+
+def build_suggestion(score, reasons, text, force_match=None):
+    if force_match:
+        lines = [
+            "[MultiAgent Hook - FORCED] Explicit parallel dispatch request detected.",
+            f"Force pattern: {force_match}",
+            "DISPATCH PARALLEL AGENTS NOW — use Agent tool with dispatching-parallel-agents pattern:",
+            "  Agent A: [task 1] -> do X",
+            "  Agent B: [task 2] -> do Y",
+            "  Then: synthesize results",
+        ]
+    else:
+        lines = [
+            "[MultiAgent Hook] This message looks like it contains multiple independent tasks.",
+            f"Score: {score} | Reasons: {', '.join(reasons)}",
+            "Consider dispatching parallel agents:",
+            "  Agent A: [task 1] -> do X",
+            "  Agent B: [task 2] -> do Y",
+            "  Then: synthesize results",
+            "",
+            "If this assessment is wrong, say 'multiagent false positive' to help improve the heuristic.",
+        ]
     return "\n".join(lines)
 
 try:
@@ -201,13 +309,28 @@ prompt = data.get("prompt", "") or ""
 text = prompt.strip()
 text_lower = text.lower()
 
+# Load session state
+state = load_state()
+is_continuation, reason, penalty = detect_continuation(state, text_lower)
+
+# --- Force trigger check (bypasses normal scoring) ---
+force_match = is_force_trigger(text_lower)
+
 score, reasons = phase1_score(text, text_lower)
 
 if ENABLE_PHASE_2 and 2 <= score < 4:
     score, reasons = phase2_heuristic(text, text_lower, score, reasons)
 
-if score >= 4:
-    suggestion = build_suggestion(score, reasons, text)
+# Apply continuation penalty
+if is_continuation:
+    score += penalty
+    score = max(0, score)
+    reasons.append(f"continuation({reason}):{penalty}")
+
+will_dispatch = (not is_continuation) and (score >= 4 or force_match)
+
+if will_dispatch:
+    suggestion = build_suggestion(score, reasons, text, force_match=force_match)
     out = {
         "continue": True,
         "suppressOutput": True,
@@ -219,4 +342,7 @@ if score >= 4:
     print(json.dumps(out, ensure_ascii=False))
 else:
     print(json.dumps({"continue": True, "suppressOutput": True}))
+
+# Persist state machine
+update_state(state, prompt, will_dispatch)
 PYEOF

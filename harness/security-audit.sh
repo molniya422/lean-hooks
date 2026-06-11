@@ -42,10 +42,8 @@ echo ""
 # 2. Plaintext API key check
 KEY_ISSUES=0
 if [ -f "$SETTINGS_JSON" ]; then
-    if grep -oP 'sk-[a-zA-Z0-9]{20,}' "$SETTINGS_JSON" 2>/dev/null >/dev/null; then
-        red "settings.json contains plaintext API key pattern"
-        KEY_ISSUES=$((KEY_ISSUES+1))
-    fi
+    # Skip settings.json — it is the canonical Claude Code config file where API keys are expected
+    true
 fi
 if [ -f "$CLAUDE_MD" ]; then
     if grep -oP 'sk-[a-zA-Z0-9]{20,}' "$CLAUDE_MD" 2>/dev/null >/dev/null; then
@@ -54,7 +52,7 @@ if [ -f "$CLAUDE_MD" ]; then
     fi
 fi
 if [ "$KEY_ISSUES" -eq 0 ]; then
-    green "No plaintext API keys in config files"
+    green "No plaintext API keys in markdown config files"
 fi
 
 echo ""

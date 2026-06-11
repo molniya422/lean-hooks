@@ -15,11 +15,24 @@ source "$SCRIPT_DIR/env.sh"
 
 INPUT=$(cat)
 
+export HARNESS_ROOT
 HOOK_INPUT="$INPUT" "$PY" - <<'PYEOF'
 import json
 import os
 import re
 import sys
+
+HARNESS_ROOT = os.environ.get("HARNESS_ROOT")
+
+def reset_multiagent_state():
+    if not HARNESS_ROOT:
+        return
+    state_file = os.path.join(HARNESS_ROOT, "data", "multiagent_session_state.json")
+    try:
+        if os.path.exists(state_file):
+            os.remove(state_file)
+    except Exception:
+        pass
 
 try:
     data = json.loads(os.environ["HOOK_INPUT"])
@@ -205,6 +218,7 @@ ma_feedback = is_multiagent_feedback(text_lower)
 reminders = []
 
 if completion:
+    reset_multiagent_state()
     reminders.append(
         "[Post-Task Hook] 任务完成。执行三层写入检查:\n"
         "  Tier 1 (auto): 本轮有实质操作(Edit/Write/Bash/修复/部署)有?\n"
