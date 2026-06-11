@@ -277,27 +277,47 @@ def is_force_trigger(text_lower):
             return pat
     return None
 
-def build_suggestion(score, reasons, text, force_match=None):
+# --- New-task signals during active session ---
+# When session state is task_active, some user messages are actually NEW
+# independent tasks disguised as follow-ups. These patterns override
+# continuation detection so multiagent can still trigger.
+NEW_TASK_PATTERNS = [
+    r"^(另外|还有|对了|顺便).*?(需要|帮我|做|写|修|改|查|找|测试|实现|添加|分析)",
+    r"^(再|另外再|顺便再|接下来再).*?(帮我|做|写|修|改|查|找|测试|实现|添加)",
+    r"(新任务|新需求|另一个|另外一个|新功能).*?(需要|帮我|做|写|修|改|查|找|测试)",
+    r"^(除了这个|除了.*之外).*?(还|另外|也|再)",
+]
+
+def is_new_task_during_active_session(state, text_lower):
+    if state.get("state") != "task_active":
+        return False
+    for pat in NEW_TASK_PATTERNS:
+        if re.search(pat, text_lower):
+            return pat
+    return False
+
+def build_suggestion(score, reasons, text, force_match=None, new_task_override=None):
+    lines = [
+        "[MultiAgent Hook - ASK USER] 检测到您的请求可能包含多个独立任务，建议先询问用户是否并行执行。",
+        f"  评分: {score} | 触发信号: {', '.join(reasons)}",
+    ]
     if force_match:
-        lines = [
-            "[MultiAgent Hook - FORCED] Explicit parallel dispatch request detected.",
-            f"Force pattern: {force_match}",
-            "DISPATCH PARALLEL AGENTS NOW — use Agent tool with dispatching-parallel-agents pattern:",
-            "  Agent A: [task 1] -> do X",
-            "  Agent B: [task 2] -> do Y",
-            "  Then: synthesize results",
-        ]
-    else:
-        lines = [
-            "[MultiAgent Hook] This message looks like it contains multiple independent tasks.",
-            f"Score: {score} | Reasons: {', '.join(reasons)}",
-            "Consider dispatching parallel agents:",
-            "  Agent A: [task 1] -> do X",
-            "  Agent B: [task 2] -> do Y",
-            "  Then: synthesize results",
-            "",
-            "If this assessment is wrong, say 'multiagent false positive' to help improve the heuristic.",
-        ]
+        lines.append(f"  强制匹配: {force_match}")
+    lines.extend([
+        "",
+        "==> 请在回复中使用 AskUserQuestion 工具向用户确认：",
+        '    问题: "检测到您的请求包含多个可并行的独立任务，是否拆分成子任务并行执行？"',
+        "    选项:",
+        "      [是，拆分成并行Agent执行] — 确认后使用 dispatching-parallel-agents pattern 分配子任务",
+        "      [否，当前会话串行处理] — 继续单Agent处理",
+        "",
+        "  规则:",
+        "    - 用户选'是' → 立即 dispatch 并行 agents，不要重复询问",
+        "    - 用户选'否' → 正常单 agent 处理，不 dispatch",
+        "    - 用户忽略或反问 → 视为'否'，继续单 agent 处理",
+        "",
+        "如果此判断有误，说 'multiagent false positive' 帮助改进规则。",
+    ])
     return "\n".join(lines)
 
 try:
@@ -316,6 +336,11 @@ is_continuation, reason, penalty = detect_continuation(state, text_lower)
 # --- Force trigger check (bypasses normal scoring) ---
 force_match = is_force_trigger(text_lower)
 
+# --- New-task-in-the-middle check ---
+# If session is active but user is actually starting a NEW independent task,
+# override continuation detection so multiagent can still trigger.
+new_task_match = is_new_task_during_active_session(state, text_lower)
+
 score, reasons = phase1_score(text, text_lower)
 
 if ENABLE_PHASE_2 and 2 <= score < 4:
@@ -323,14 +348,22 @@ if ENABLE_PHASE_2 and 2 <= score < 4:
 
 # Apply continuation penalty
 if is_continuation:
-    score += penalty
-    score = max(0, score)
-    reasons.append(f"continuation({reason}):{penalty}")
+    if new_task_match:
+        # This is a new independent task masquerading as a follow-up.
+        # Cancel continuation penalty so multiagent can evaluate normally.
+        score = max(score, 0)
+        reasons.append(f"new_task_override({new_task_match})")
+    else:
+        score += penalty
+        score = max(0, score)
+        reasons.append(f"continuation({reason}):{penalty}")
 
-will_dispatch = (not is_continuation) and (score >= 4 or force_match)
+# Dispatch only if not a pure continuation (unless new-task override) AND score >=4 or force trigger
+effective_continuation = is_continuation and not new_task_match
+will_dispatch = (not effective_continuation) and (score >= 4 or force_match)
 
 if will_dispatch:
-    suggestion = build_suggestion(score, reasons, text, force_match=force_match)
+    suggestion = build_suggestion(score, reasons, text, force_match=force_match, new_task_override=new_task_match)
     out = {
         "continue": True,
         "suppressOutput": True,

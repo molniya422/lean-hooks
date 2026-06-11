@@ -21,6 +21,22 @@ import sqlite3
 import sys
 from datetime import datetime, timezone
 
+# Ensure UTF-8 on Windows MINGW64 (prevents surrogate errors from stdin pipe)
+for stream in (sys.stdin, sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (OSError, ValueError):
+            pass
+
+
+def sanitize_unicode(text):
+    """Replace invalid UTF-16 surrogates with replacement character."""
+    if not isinstance(text, str):
+        return text
+    # errors='replace' on encode+decode strips surrogates safely
+    return text.encode("utf-8", errors="replace").decode("utf-8", errors="replace")
+
 
 def find_db():
     data_dir = os.environ.get("CLAUDE_MEM_DATA_DIR")
@@ -106,6 +122,10 @@ def parse_input():
 
 def main():
     record = parse_input()
+
+    # Sanitize any invalid surrogates from stdin/CLI input before touching DB
+    for key in ("project", "summary", "files"):
+        record[key] = sanitize_unicode(record.get(key) or "")
 
     has_substance = record.get("has_substance")
     if has_substance is False:
