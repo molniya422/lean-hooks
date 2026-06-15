@@ -48,6 +48,13 @@ timeout = 15
 enabled = true
 
 [[hook]]
+name = "langgraph-router"
+file = "harness/langgraph-router.sh"
+events = ["UserPromptSubmit"]
+timeout = 300
+enabled = true
+
+[[hook]]
 name = "training-collect"
 file = "harness/training-collect.sh"
 events = ["Stop"]
