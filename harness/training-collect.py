@@ -73,7 +73,7 @@ def ensure_feedback_md() -> None:
 def count_entries(text: str, dim: str, labels: dict[str, str]) -> dict[str, int]:
     """Count occurrences under a specific ## section heading."""
     # Extract the section block for this dimension
-    block_re = rf"^##\s+{re.escape(dim)}.*?(?=^##|\Z)"
+    block_re = rf"^##\s+{re.escape(dim)}.*?(?=^##[^#]|\Z)"
     m = re.search(block_re, text, re.MULTILINE | re.DOTALL | re.IGNORECASE)
     block = m.group(0) if m else ""
     counts = {}
@@ -172,8 +172,13 @@ def migrate_v1_to_v21(meta: dict) -> dict:
         fn = old.get("misses", 0)
         tp = old.get("correct_triggers", 0)
         if "observations" in old:
-            tp = 0
-            fp = old.get("observations", 0)
+            # Legacy v1 "observations" count: prefer correct_triggers if available
+            if "correct_triggers" in old:
+                tp = old["correct_triggers"]
+                fp = max(0, old.get("observations", 0) - tp)
+            else:
+                tp = 0
+                fp = old.get("observations", 0)
         defaults = COMPLEXITY_DEFAULTS.get(dim_name, {"target": 1.0})
         return {
             "counts": {"tp": tp, "fp": fp, "fn": fn},

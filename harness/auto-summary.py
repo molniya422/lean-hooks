@@ -21,6 +21,17 @@ import sqlite3
 import sys
 from datetime import datetime, timezone
 
+# --- Windows Store python3 shim guard ---
+# On some Windows installs `python3` resolves to the Microsoft Store redirector
+# (AppInstallerPythonRedirector.exe) which exits immediately with code 49.
+# Detect that and point the user to use `python` instead.
+if sys.platform == "win32" and "AppInstallerPythonRedirector" in sys.executable:
+    sys.stderr.write(
+        "auto-summary: detected Windows Store python3 stub (AppInstallerPythonRedirector).\n"
+        "Fix: set HARNESS_PYTHON to a real Python, e.g. HARNESS_PYTHON=python auto-summary.py\n"
+    )
+    sys.exit(1)
+
 # Ensure UTF-8 on Windows MINGW64 (prevents surrogate errors from stdin pipe)
 for stream in (sys.stdin, sys.stdout, sys.stderr):
     if hasattr(stream, "reconfigure"):

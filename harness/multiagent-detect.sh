@@ -10,6 +10,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/env.sh"
 
+# Threshold constants — adjustable by training-collect.py --apply-thresholds
+PHASE1_TRIGGER_MIN=4
+PHASE2_TRIGGER_MIN=3
+export PHASE1_TRIGGER_MIN PHASE2_TRIGGER_MIN
+
 export PYTHONIOENCODING=utf-8
 export PYTHONUTF8=1
 
@@ -21,8 +26,12 @@ if [ "${1:-}" = "--dry-run" ]; then
     echo "Reading input from stdin..."
     echo ""
     # Pass the input through with DRY_RUN flag
-    DRY_RUN=1 HOOK_INPUT="$INPUT" "$PY" - <<'PYEOF'
+    DRY_RUN=1 HOOK_INPUT="$INPUT" PHASE1_TRIGGER_MIN="$PHASE1_TRIGGER_MIN" PHASE2_TRIGGER_MIN="$PHASE2_TRIGGER_MIN" "$PY" - <<'PYEOF'
 import json, os, re, sys
+
+# Read thresholds from env
+PHASE1_TRIGGER_MIN = int(os.environ.get("PHASE1_TRIGGER_MIN", "4"))
+PHASE2_TRIGGER_MIN = int(os.environ.get("PHASE2_TRIGGER_MIN", "3"))
 
 # Same configuration as main run
 ENABLE_PHASE_2 = True
@@ -83,15 +92,22 @@ print(f"Phase 1 score: {score}")
 print(f"  Reasons: {', '.join(reasons) if reasons else 'none'}")
 
 if ENABLE_PHASE_2:
-    if 2 <= score < 4:
+    if 2 <= score < PHASE1_TRIGGER_MIN:
         score, reasons = phase2_heuristic(text, text_lower, score, reasons)
         print(f"Phase 2 score: {score}")
     else:
-        print("Phase 2: skipped (score not in [2,4) range)")
+        print(f"Phase 2: skipped (score not in [2,{PHASE1_TRIGGER_MIN}) range)")
     print(f"  Reasons: {', '.join(reasons) if reasons else 'none'}")
 
+# Determine effective threshold
+if ENABLE_PHASE_2 and any(r in reasons for r in ("multi_verb", "multi_file")):
+    effective_threshold = PHASE2_TRIGGER_MIN
+else:
+    effective_threshold = PHASE1_TRIGGER_MIN
+
 print(f"\nFinal score: {score}")
-print(f"Decision: {'TRIGGER (>= 4) — suggest parallel agents' if score >= 4 else 'NO TRIGGER (< 4)'}")
+print(f"Effective threshold: {effective_threshold} (P1={PHASE1_TRIGGER_MIN}, P2={PHASE2_TRIGGER_MIN})")
+print(f"Decision: {'TRIGGER — suggest parallel agents' if score >= effective_threshold else 'NO TRIGGER'}")
 PYEOF
     exit 0
 fi
@@ -172,11 +188,15 @@ def detect_continuation(state, text_lower):
 
     return False, "new_task_or_unclear", 0
 
-def update_state(state, prompt, will_dispatch):
+def update_state(state, prompt, will_dispatch, score=0, reasons=None, force_match=None):
     if will_dispatch:
         state["state"] = "task_active"
         state["task_context"] = prompt[:200]
         state["task_keywords"] = list(extract_keywords(prompt.lower()))[:20]
+        state["last_trigger_score"] = score
+        state["last_trigger_reasons"] = reasons or []
+        if force_match:
+            state["last_force_match"] = force_match
     save_state(state)
 
 
@@ -297,12 +317,11 @@ def is_new_task_during_active_session(state, text_lower):
     return False
 
 def build_suggestion(score, reasons, text, force_match=None, new_task_override=None):
+    # Static injection text for cache stability — detailed score/reasons logged to state file only
     lines = [
         "[MultiAgent Hook - ASK USER] 检测到您的请求可能包含多个独立任务，建议先询问用户是否并行执行。",
-        f"  评分: {score} | 触发信号: {', '.join(reasons)}",
     ]
-    if force_match:
-        lines.append(f"  强制匹配: {force_match}")
+    # Score and force_match details logged to state file, not injected
     lines.extend([
         "",
         "==> 请在回复中使用 AskUserQuestion 工具向用户确认：",
@@ -319,6 +338,11 @@ def build_suggestion(score, reasons, text, force_match=None, new_task_override=N
         "如果此判断有误，说 'multiagent false positive' 帮助改进规则。",
     ])
     return "\n".join(lines)
+
+# Read thresholds from shell env (exported above), with defaults
+import os
+PHASE1_TRIGGER_MIN = int(os.environ.get("PHASE1_TRIGGER_MIN", "4"))
+PHASE2_TRIGGER_MIN = int(os.environ.get("PHASE2_TRIGGER_MIN", "3"))
 
 try:
     data = json.loads(os.environ["HOOK_INPUT"])
@@ -337,20 +361,16 @@ is_continuation, reason, penalty = detect_continuation(state, text_lower)
 force_match = is_force_trigger(text_lower)
 
 # --- New-task-in-the-middle check ---
-# If session is active but user is actually starting a NEW independent task,
-# override continuation detection so multiagent can still trigger.
 new_task_match = is_new_task_during_active_session(state, text_lower)
 
 score, reasons = phase1_score(text, text_lower)
 
-if ENABLE_PHASE_2 and 2 <= score < 4:
+if ENABLE_PHASE_2 and 2 <= score < PHASE1_TRIGGER_MIN:
     score, reasons = phase2_heuristic(text, text_lower, score, reasons)
 
 # Apply continuation penalty
 if is_continuation:
     if new_task_match:
-        # This is a new independent task masquerading as a follow-up.
-        # Cancel continuation penalty so multiagent can evaluate normally.
         score = max(score, 0)
         reasons.append(f"new_task_override({new_task_match})")
     else:
@@ -358,9 +378,16 @@ if is_continuation:
         score = max(0, score)
         reasons.append(f"continuation({reason}):{penalty}")
 
-# Dispatch only if not a pure continuation (unless new-task override) AND score >=4 or force trigger
+# After Phase 2, use lower threshold (PHASE2_TRIGGER_MIN)
+# Determine which threshold applies
+if ENABLE_PHASE_2 and any(r in reasons for r in ("multi_verb", "multi_file")):
+    effective_threshold = PHASE2_TRIGGER_MIN
+else:
+    effective_threshold = PHASE1_TRIGGER_MIN
+
+# Dispatch if score meets threshold or force trigger
 effective_continuation = is_continuation and not new_task_match
-will_dispatch = (not effective_continuation) and (score >= 4 or force_match)
+will_dispatch = (not effective_continuation) and (score >= effective_threshold or force_match)
 
 if will_dispatch:
     suggestion = build_suggestion(score, reasons, text, force_match=force_match, new_task_override=new_task_match)
@@ -376,6 +403,6 @@ if will_dispatch:
 else:
     print(json.dumps({"continue": True, "suppressOutput": True}))
 
-# Persist state machine
-update_state(state, prompt, will_dispatch)
+# Persist state machine (with debug info logged to state file only)
+update_state(state, prompt, will_dispatch, score=score, reasons=reasons, force_match=force_match)
 PYEOF

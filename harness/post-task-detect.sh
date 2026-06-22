@@ -68,7 +68,7 @@ NEGATIONS = ["没", "未", "不", "还没", "没有", "无法", "不能", "别",
 INTENTIONS = ["想", "打算", "准备", "试试", "看看", "尝试", "让我", "怎么", "要不要", "能不能",
               "want to", "going to", "try to", "let's", "should i", "could we", "how to"]
 
-def has_negation_or_intention(text_lower, word_pos, window=5):
+def has_negation_or_intention(text_lower, word_pos, window=10):
     start = max(0, word_pos - window)
     prefix = text_lower[start:word_pos]
     for neg in NEGATIONS:
@@ -235,7 +235,8 @@ if completion:
 if ma_feedback:
     reminders.append(
         f"[MultiAgentOpt] Detected {ma_feedback} feedback.\n"
-        f"  Record to config/multiagent-feedback/feedback.md:\n"
+        f"  Record to config/training-loop/feedback.md:\n"
+        f"    ## MultiAgentOpt\n"
         f"    ### {ma_feedback.replace('_', ' ').title().replace('False Positive', 'False Positive')}\n"
         f"    - 任务描述: ...\n"
         f"    - {'原因: 用户消息不该触发但触发了' if ma_feedback == 'false_positive' else '期望: 用户消息本该触发但遗漏了'}\n"

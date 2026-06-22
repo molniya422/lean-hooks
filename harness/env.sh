@@ -47,6 +47,8 @@ else
 fi
 
 # Verify the chosen interpreter actually works (Windows Store shim fails in MINGW64)
+# The Microsoft Store python3 stub opens the Store UI and exits with code 49 in
+# non-interactive shells; treat that as "not executable" and fall back.
 if ! "$PY" --version &>/dev/null; then
     if [ "$PY" = "python3" ] && command -v python &>/dev/null; then
         PY="python"
@@ -56,6 +58,17 @@ if ! "$PY" --version &>/dev/null; then
     if ! "$PY" --version &>/dev/null; then
         echo "[harness] ERROR: Python '$PY' found but does not execute. Set HARNESS_PYTHON=/path/to/python" >&2
         exit 1
+    fi
+fi
+
+# Extra guard: Windows Store stub exits 49 when invoked from MINGW64/Git Bash.
+# Replace python3 with the working alternative now so all downstream scripts use it.
+if [ "$PY" = "python3" ]; then
+    _version_check=$("$PY" --version 2>&1) || _version_check=""
+    if echo "$_version_check" | grep -qi "AppInstallerPythonRedirector\|Windows Store\|Microsoft Store"; then
+        if command -v python &>/dev/null; then
+            PY="python"
+        fi
     fi
 fi
 

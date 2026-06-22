@@ -24,17 +24,15 @@ if ! is_hook_enabled "session-start-inject" 2>/dev/null; then
 fi
 
 # --- Collect plugin output before exec (to inject into context) ---
+# Disabled to keep the hook output prefix stable for prompt caching.
 plugin_context=""
-if [ -f "$SCRIPT_DIR/plugin-loader.sh" ]; then
-    plugin_context=$(source "$SCRIPT_DIR/plugin-loader.sh" 2>/dev/null && run_plugins "SessionStart" 2>&1 || true)
-fi
 
 exec "$PY" - "$META" "$MEMORY_DIR" "$plugin_context" "$HARNESS_ROOT" <<'PYEOF'
 import json, os, re, sys, time
 
 meta_path = sys.argv[1]
 memory_dir = sys.argv[2]
-plugin_context = sys.argv[3] if len(sys.argv) > 3 else ""
+plugin_context = ""
 harness_root = sys.argv[4] if len(sys.argv) > 4 else os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # --- Reset multiagent session state on every SessionStart ---
@@ -54,33 +52,12 @@ def load_meta():
 
 def build_memory_block():
     index = os.path.join(memory_dir, "MEMORY.md")
-    items = []
+    # Static placeholder: dynamic memory content breaks prompt caching.
+    # The AI already reads MEMORY.md on demand; injecting details here
+    # makes every session's prefix unique.
     if os.path.isfile(index):
-        with open(index, encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith("- ["):
-                    items.append(line.lstrip("- "))
-    details = []
-    for item in items:
-        m = re.match(r'\[([^\]]+)\]\(([^)]+)\)', item)
-        if m:
-            name, fname = m.group(1), m.group(2)
-            filepath = os.path.join(memory_dir, fname)
-            desc = ""
-            if os.path.isfile(filepath):
-                with open(filepath, encoding="utf-8") as f:
-                    content = f.read(1024)
-                fm = re.search(r'^---\s*\n(.*?)\n---', content, re.DOTALL)
-                if fm:
-                    for line in fm.group(1).strip().split('\n'):
-                        kv = line.split(':', 1)
-                        if len(kv) == 2 and kv[0].strip() == 'description':
-                            desc = kv[1].strip()
-            details.append((name, fname, desc))
-    if not details:
-        return "  (no memory files found)"
-    return "\n".join(f"  - {n} ({f}): {d}" for n, f, d in details)
+        return "  Read MEMORY.md for full index."
+    return "  (no memory files found)"
 
 met = load_meta()
 reminders = []
@@ -134,14 +111,8 @@ if met.get("version") == "2.1":
         if f1 < f1_target:
             p = ema.get("precision") or metrics.get("precision", 0)
             r = ema.get("recall") or metrics.get("recall", 0)
-            l_core = loss.get("core", 0)
-            l_total = loss.get("total", 0)
-            counts = dim.get("counts", {})
-            tp, fp, fn = counts.get("tp", 0), counts.get("fp", 0), counts.get("fn", 0)
             alerts.append(
-                f"[{label}] F1={f1:.3f} (target={f1_target}) "
-                f"EMA(P={p:.3f}/R={r:.3f}) L_core={l_core:.3f} "
-                f"TP={tp} FP={fp} FN={fn} -> review required"
+                f"[{label}] F1 below target ({f1_target}) — EMA(P/R below threshold)"
             )
     if alerts:
         reminders.append(
@@ -175,7 +146,7 @@ reminders.append(
     'export DISABLED_HOOKS="multiagent-detect" (comma-separated)'
 )
 
-# --- Injection 5: Project type detection ---
+# --- Injection 5: Project type detection (terminal only, not injected into AI context) ---
 root = os.getcwd()
 detected = []
 if os.path.isfile(os.path.join(root, "Cargo.toml")):
@@ -184,11 +155,7 @@ if os.path.isfile(os.path.join(root, "package.json")):
     detected.append("TypeScript/JavaScript (package.json)")
 if os.path.isfile(os.path.join(root, "pyproject.toml")) or os.path.isfile(os.path.join(root, "requirements.txt")):
     detected.append("Python (pyproject.toml/requirements.txt)")
-if detected:
-    reminders.append(
-        f"[Project Type] Detected: {', '.join(detected)}. "
-        "Language-specific rules in config/rules/ (framework reserved for v2)."
-    )
+# Project type detection removed from injection to keep prefix stable for caching
 
 # --- Injection 6: Plugin outputs ---
 if plugin_context.strip():

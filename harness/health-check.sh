@@ -65,6 +65,7 @@ fi
 echo ""
 
 # 5. Harness scripts
+#    Core hooks (legacy v1)
 echo "[5] Harness Scripts"
 for s in health-check.sh training-collect.sh post-task-detect.sh session-start-inject.sh multiagent-detect.sh security-audit.sh; do
   if [ -x "$HARNESS_DIR/$s" ]; then green "$s — executable"
@@ -72,10 +73,34 @@ for s in health-check.sh training-collect.sh post-task-detect.sh session-start-i
   else red "$s — missing"
   fi
 done
+#    New v2 modules
+for s in error-handler.sh plugin-loader.sh; do
+  if [ -f "$HARNESS_DIR/$s" ]; then green "$s — present"
+  else yellow "$s — missing (optional but recommended)"
+  fi
+done
+#    Python modules
+for py in data-lifecycle.py weighted-scoring.py stats.py test_all.py auto-summary.py; do
+  if [ -f "$HARNESS_DIR/$py" ]; then green "$py — present"
+  else yellow "$py — missing"
+  fi
+done
 echo ""
 
-# 6. Web Access
-echo "[6] Web Access"
+# 6. lean-hooks infrastructure
+echo "[6] lean-hooks Infrastructure"
+if [ -f "$HARNESS_ROOT/lean-hooks.toml" ]; then green "lean-hooks.toml — present"
+else yellow "lean-hooks.toml — missing (defaults apply)"; fi
+if [ -d "$HARNESS_ROOT/hooks" ]; then
+    count=$(find "$HARNESS_ROOT/hooks" -maxdepth 1 -name "*.sh" -type f 2>/dev/null | wc -l | tr -d ' ')
+    green "hooks/ directory — $count plugin(s) registered"
+else yellow "hooks/ directory — missing (plugin system inactive)"; fi
+if [ -d "$HARNESS_ROOT/archive" ]; then green "archive/ directory — present (data lifecycle ready)"
+else yellow "archive/ directory — missing (data lifecycle inactive)"; fi
+echo ""
+
+# 7. Web Access
+echo "[7] Web Access"
 if [ -f "$AGENT_BROWSER_BIN" ]; then
   ab_ver=$("$AGENT_BROWSER_BIN" --version 2>/dev/null || echo "unknown")
   green "agent-browser binary — $ab_ver"
@@ -88,8 +113,8 @@ if [ -f "$AGENT_BROWSER_WRAPPER" ]; then green "agent-browser wrapper exists"; e
 if [ -f "$CHROME_EXE" ]; then green "Chromium — $CHROME_EXE"; else red "Chromium missing: $CHROME_EXE"; fi
 echo ""
 
-# 7. Metrics Engine (v2.1)
-echo "[7] Metrics Engine"
+# 8. Metrics Engine (v2.1)
+echo "[8] Metrics Engine"
 if [ -f "$HARNESS_DIR/training-collect.py" ]; then
   ver=$("$PY" "$HARNESS_DIR/training-collect.py" --help 2>/dev/null | head -1 || echo unknown)
   green "training-collect.py — $ver"
@@ -102,3 +127,7 @@ echo "---"
 printf "Results: \033[32m%d pass\033[0m, \033[33m%d warn\033[0m, \033[31m%d fail\033[0m\n" "$PASS" "$WARN" "$FAIL"
 
 if [ "$FAIL" -gt 0 ]; then exit 1; fi
+
+# Emit JSON with suppressOutput so dynamic stdout (counts, sizes, versions)
+# doesn't enter AI context as additionalContext (breaks prompt caching)
+echo '{"continue":true,"suppressOutput":true}'
