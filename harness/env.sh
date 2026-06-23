@@ -111,6 +111,12 @@ if [ ! -d "$_MEMORY_DIR" ] && [ -d "$CONFIG_DIR/projects/D--claude-ecosystem/mem
     _MEMORY_DIR="$CONFIG_DIR/projects/D--claude-ecosystem/memory"
 fi
 MEMORY_DIR="$_MEMORY_DIR"
+LOOP_ENG_DIR="$CONFIG_DIR/loop-engineering"
+LOOP_STATES_DIR="$LOOP_ENG_DIR/states"
+LOOP_RUN_LOG="$LOOP_ENG_DIR/run-log.jsonl"
+LOOP_BUDGET="$LOOP_ENG_DIR/budget.json"
+LOOP_REGISTRY="$LOOP_ENG_DIR/patterns/registry.yaml"
+
 HARNESS_DIR="$CONFIG_DIR/harness"
 CLAUDE_MD="$CONFIG_DIR/CLAUDE.md"
 ECOSYSTEM="$HARNESS_ROOT"
@@ -130,6 +136,11 @@ HARNESS_ROOT="$(_normalize_path "$HARNESS_ROOT")"
 CONFIG_DIR="$(_normalize_path "$CONFIG_DIR")"
 LOOP_DIR="$(_normalize_path "$LOOP_DIR")"
 MEMORY_DIR="$(_normalize_path "$MEMORY_DIR")"
+LOOP_ENG_DIR="$(_normalize_path "$LOOP_ENG_DIR")"
+LOOP_STATES_DIR="$(_normalize_path "$LOOP_STATES_DIR")"
+LOOP_RUN_LOG="$(_normalize_path "$LOOP_RUN_LOG")"
+LOOP_BUDGET="$(_normalize_path "$LOOP_BUDGET")"
+LOOP_REGISTRY="$(_normalize_path "$LOOP_REGISTRY")"
 HARNESS_DIR="$(_normalize_path "$HARNESS_DIR")"
 CLAUDE_MD="$(_normalize_path "$CLAUDE_MD")"
 ECOSYSTEM="$(_normalize_path "$ECOSYSTEM")"
@@ -163,6 +174,7 @@ fi
 
 # --- Export all for child scripts ---
 export PY HARNESS_ROOT CONFIG_DIR LOOP_DIR MEMORY_DIR HARNESS_DIR CLAUDE_MD ECOSYSTEM
+export LOOP_ENG_DIR LOOP_STATES_DIR LOOP_RUN_LOG LOOP_BUDGET LOOP_REGISTRY
 export CHROME_EXE AGENT_BROWSER_BIN
 
 # --- Source error handler (timeout_wrap, error_log, safe_run) ---

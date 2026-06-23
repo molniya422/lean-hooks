@@ -1,0 +1,280 @@
+# Loop Engineering Pattern Registry
+# Maps existing harness skills to 7 production loop patterns.
+# Each entry defines cadence, risk, skills, tools, phases, safety, and checklist.
+
+patterns:
+  - name: daily-triage
+    description: "Scan open issues and PRs, categorize, flag stale items"
+    cadence: "1d"
+    trigger: "schedule"
+    risk: "low"
+    skills:
+      maker: "issue-triage"
+      checker: "verification-before-completion"
+    tools: ["Bash", "Read", "Grep"]
+    state_file: "daily-triage.json"
+    phases:
+      L1: "propose-only: scan and report, no auto-action"
+      L2: "assisted: auto-triage with human gate for assignments"
+      L3: "unattended: auto-triage + auto-label + auto-comment"
+    human_gates:
+      L1: false
+      L2: true
+      L3: false
+    week_one_mode: "L1"
+    token_cost:
+      per_run: 5000
+      daily_cap: 50000
+    path_allowlist:
+      - "config/loop-engineering/states/*"
+    path_denylist:
+      - ".env"
+      - "*.key"
+    checklist:
+      purpose: "Scan and categorize new/stale issues and PRs each morning"
+      scheduling: "Daily at 09:00 or on SessionStart if >24h since last run"
+      skills: "issue-triage for scanning, verification-before-completion for checker"
+      maker_checker: "L2+: issue-triage = maker, verification-before-completion = checker"
+      state: "daily-triage.json tracks pending/resolved triage items"
+      human_handoff: "L2: human confirms assignments; L3: auto-assign but notify"
+      connectors: "gh CLI for issue/PR APIs"
+      cost: "~5K tokens/run, ~50K daily cap"
+      observability: "run-log.jsonl entries + state file"
+      safety: "No code modification. Only labels/comments on issues."
+
+  - name: pr-babysitter
+    description: "Watch a PR until checks pass and reviews resolve"
+    cadence: "5m-15m"
+    trigger: "manual"
+    risk: "high"
+    skills:
+      maker: "babysit"
+      checker: "requesting-code-review"
+    tools: ["Bash", "Read", "Grep"]
+    state_file: "pr-babysitter.json"
+    phases:
+      L1: "watch: check PR status, report results"
+      L2: "watch + fix: fix simple CI failures, resolve stale threads"
+      L3: "unattended: fix + merge when green"
+    human_gates:
+      L1: false
+      L2: true
+      L3: true
+    week_one_mode: "L1"
+    token_cost:
+      per_run: 20000
+      daily_cap: 200000
+    path_allowlist:
+      - "src/**"
+      - "tests/**"
+    path_denylist:
+      - ".env"
+      - "package-lock.json"
+    checklist:
+      purpose: "Monitor PR until all checks pass and reviews resolve"
+      scheduling: "Manual trigger, 5-15min polling"
+      skills: "babysit for monitoring, requesting-code-review for checker"
+      maker_checker: "L2+: babysit = maker (fix issues), requesting-code-review = checker (verify fix)"
+      state: "pr-babysitter.json tracks PR number, pending checks, unresolved threads"
+      human_handoff: "L2/L3: human confirms merge; critical check failures escalate"
+      connectors: "gh CLI, GraphQL API"
+      cost: "~20K tokens/run, ~200K daily cap"
+      observability: "run-log.jsonl entries + state file"
+      safety: "No force-push. No merge without explicit approval. Max 10 fix attempts."
+
+  - name: ci-sweeper
+    description: "Fix broken CI runs automatically"
+    cadence: "5m-15m"
+    trigger: "webhook_or_schedule"
+    risk: "very_high"
+    skills:
+      maker: "systematic-debugging"
+      checker: "verification-before-completion"
+    tools: ["Bash", "Read", "Edit", "Grep"]
+    state_file: "ci-sweeper.json"
+    phases:
+      L1: "report: detect failing CI, report status"
+      L2: "cautious: fix lint/type errors only, with human gate"
+      L3: "unattended: fix any CI failure, push, verify green"
+    human_gates:
+      L1: false
+      L2: true
+      L3: false
+    week_one_mode: "L1"
+    token_cost:
+      per_run: 50000
+      daily_cap: 500000
+    path_allowlist:
+      - "src/**"
+      - "tests/**"
+      - ".github/workflows/**"
+    path_denylist:
+      - ".env"
+      - "*.secret*"
+    checklist:
+      purpose: "Detect and fix broken CI pipelines"
+      scheduling: "5-15min polling or CI webhook trigger"
+      skills: "systematic-debugging = maker, verification-before-completion = checker"
+      maker_checker: "Required at L2+: maker fixes, checker verifies fix doesn't break else"
+      state: "ci-sweeper.json tracks failing pipelines, fix attempts"
+      human_handoff: "L2: confirm before push; L3: auto-push but notify on >3 failures"
+      connectors: "CI APIs (GitHub Actions), git"
+      cost: "~50K tokens/run, very high for complex failures"
+      observability: "run-log.jsonl + failure-report.json"
+      safety: "Max 3 fix attempts per pipeline. Never modify secrets. Force-push prohibited."
+
+  - name: dependency-sweeper
+    description: "Check for outdated/vulnerable dependencies and patch"
+    cadence: "6h-1d"
+    trigger: "schedule"
+    risk: "medium"
+    skills:
+      maker: "security-guardian"
+      checker: "verification-before-completion"
+    tools: ["Bash", "Read", "Edit"]
+    state_file: "dependency-sweeper.json"
+    phases:
+      L1: "scan: report outdated/vulnerable deps"
+      L2: "patch-only: auto-patch non-breaking minor versions"
+      L3: "unattended: patch + test + PR"
+    human_gates:
+      L1: false
+      L2: true
+      L3: false
+    week_one_mode: "L1"
+    token_cost:
+      per_run: 15000
+      daily_cap: 100000
+    path_allowlist:
+      - "package.json"
+      - "requirements.txt"
+      - "Cargo.toml"
+    path_denylist:
+      - ".env"
+      - "*/secrets/*"
+    checklist:
+      purpose: "Keep dependencies current and secure"
+      scheduling: "6h-1d polling"
+      skills: "security-guardian = maker, verification-before-completion = checker"
+      maker_checker: "L2+: security-guardian identifies, checker verifies no breakage"
+      state: "dependency-sweeper.json tracks pending patches"
+      human_handoff: "L2: confirm before applying patches; L3: auto-patch minor, escalate major"
+      connectors: "npm/pip/cargo APIs, audit tools"
+      cost: "~15K tokens/run"
+      observability: "run-log.jsonl + state file"
+      safety: "Patch minor versions only at L2. Never auto-upgrade major versions. Always run tests post-patch."
+
+  - name: changelog-drafter
+    description: "Generate changelog entries from commits and PRs"
+    cadence: "1d_or_tag"
+    trigger: "schedule_or_manual"
+    risk: "low"
+    skills:
+      maker: "repo-recap"
+      checker: "verification-before-completion"
+    tools: ["Bash", "Read", "Grep"]
+    state_file: "changelog-drafter.json"
+    phases:
+      L1: "draft: generate changelog draft for review"
+      L2: "assisted: draft + commit with human gate"
+      L3: "unattended: draft + commit + tag"
+    human_gates:
+      L1: false
+      L2: true
+      L3: false
+    week_one_mode: "L1"
+    token_cost:
+      per_run: 5000
+      daily_cap: 20000
+    path_allowlist:
+      - "CHANGELOG.md"
+      - "RELEASE_NOTES*"
+    path_denylist: []
+    checklist:
+      purpose: "Maintain changelog from git history"
+      scheduling: "Daily or on tag push"
+      skills: "repo-recap = maker, verification-before-completion = checker"
+      maker_checker: "L2+: repo-recap drafts, checker verifies entries match commits"
+      state: "changelog-drafter.json tracks last-tagged-version"
+      human_handoff: "L2: confirm draft before commit; L3: auto-commit with notification"
+      connectors: "git log, gh API"
+      cost: "~5K tokens/run, low"
+      observability: "run-log.jsonl + state file"
+      safety: "Never modify git tags. Never force-push. Changelog append-only."
+
+  - name: post-merge-cleanup
+    description: "Clean up branches, temporary files, and stale worktrees after merge"
+    cadence: "1d-6h"
+    trigger: "schedule_or_webhook"
+    risk: "low"
+    skills:
+      maker: "finishing-a-development-branch"
+      checker: "verification-before-completion"
+    tools: ["Bash", "Read"]
+    state_file: "post-merge-cleanup.json"
+    phases:
+      L1: "off-peak: report merged branches and stale worktrees"
+      L2: "assisted: delete stale branches with human gate"
+      L3: "unattended: auto-delete branches, clean worktrees"
+    human_gates:
+      L1: false
+      L2: true
+      L3: false
+    week_one_mode: "L1"
+    token_cost:
+      per_run: 8000
+      daily_cap: 30000
+    path_allowlist: []
+    path_denylist:
+      - "main"
+      - "master"
+      - "develop"
+    checklist:
+      purpose: "Clean up post-merge artifacts"
+      scheduling: "1d-6h off-peak"
+      skills: "finishing-a-development-branch = maker, verification-before-completion = checker"
+      maker_checker: "L2+: maker identifies cleanup targets, checker verifies nothing active deleted"
+      state: "post-merge-cleanup.json tracks cleanup candidates"
+      human_handoff: "L2: confirm before branch deletion; L3: auto-delete non-protected branches"
+      connectors: "git, gh API"
+      cost: "~8K tokens/run"
+      observability: "run-log.jsonl + state file"
+      safety: "Never delete protected branches (main, master, develop). Never delete unmerged branches."
+
+  - name: issue-triage
+    description: "Triage open issues: categorize, detect duplicates, assess risk"
+    cadence: "2h-1d"
+    trigger: "schedule"
+    risk: "low"
+    skills:
+      maker: "issue-triage"
+      checker: "verification-before-completion"
+    tools: ["Bash", "Read", "Grep"]
+    state_file: "issue-triage.json"
+    phases:
+      L1: "propose-only: scan and propose labels, no posting"
+      L2: "assisted: post labels/comments with human gate"
+      L3: "unattended: auto-label, auto-comment, auto-close duplicates"
+    human_gates:
+      L1: false
+      L2: true
+      L3: false
+    week_one_mode: "L1"
+    token_cost:
+      per_run: 5000
+      daily_cap: 50000
+    path_allowlist:
+      - "config/loop-engineering/states/*"
+    path_denylist:
+      - ".env"
+    checklist:
+      purpose: "Keep issue tracker organized and triaged"
+      scheduling: "2h-1d polling"
+      skills: "issue-triage = maker, verification-before-completion = checker"
+      maker_checker: "L2+: issue-triage proposes actions, checker verifies correctness"
+      state: "issue-triage.json tracks triaged/untriaged issues"
+      human_handoff: "L2: confirm before posting; L3: auto-post with notification"
+      connectors: "GitHub Issues API (gh)"
+      cost: "~5K tokens/run"
+      observability: "run-log.jsonl + state file"
+      safety: "Never close issues without clear duplicate evidence. Never modify issue assignees without confirmation."

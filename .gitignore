@@ -16,6 +16,13 @@ skill-feedback/feedback.md
 multiagent-feedback/feedback.md
 memory/
 
+# Loop engineering runtime data
+loop-engineering/run-log.jsonl
+loop-engineering/states/
+loop-engineering/failure-report.json
+loop-engineering/budget.json
+loop-engineering/archive/
+
 # OS
 .DS_Store
 Thumbs.db

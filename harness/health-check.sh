@@ -123,6 +123,34 @@ else
 fi
 echo ""
 
+# 9. Loop Engineering Infrastructure
+echo "[9] Loop Engineering"
+if [ -d "$LOOP_ENG_DIR" ]; then
+  green "loop-engineering/ directory exists"
+  if [ -f "$LOOP_BUDGET" ]; then green "budget.json exists"; else yellow "budget.json missing"; fi
+  if [ -f "$LOOP_RUN_LOG" ]; then
+    runs=$(wc -l < "$LOOP_RUN_LOG" 2>/dev/null | tr -d ' ' || echo 0)
+    if [ "$runs" -gt 0 ] 2>/dev/null; then green "run-log.jsonl exists ($runs entries)"; else green "run-log.jsonl exists (empty)"; fi
+  else yellow "run-log.jsonl missing"; fi
+  if [ -d "$LOOP_STATES_DIR" ]; then
+    states=$(find "$LOOP_STATES_DIR" -name "*.json" -type f 2>/dev/null | wc -l | tr -d ' ')
+    green "states/ directory — $states pattern state(s)"
+  else yellow "states/ directory — missing"; fi
+  if [ -f "$LOOP_ENG_DIR/safety.md" ]; then green "safety.md exists"; else yellow "safety.md missing"; fi
+  if [ -f "$LOOP_ENG_DIR/failure-report.json" ]; then green "failure-report.json exists"; else yellow "failure-report.json missing"; fi
+  if [ -f "$LOOP_REGISTRY" ]; then green "registry.yaml exists"; else yellow "registry.yaml missing"; fi
+  # Loop Python scripts
+  for lp in loop-state-manager.py loop-run-logger.py loop-budget-tracker.py loop-readiness-audit.py loop-failure-detector.py loop-checklist-validator.py; do
+    if [ -f "$HARNESS_DIR/$lp" ]; then green "$lp — present"; else yellow "$lp — missing"; fi
+  done
+  # Quick readiness level
+  level=$("$PY" "$HARNESS_DIR/loop-readiness-audit.py" --quick --json 2>/dev/null | "$PY" -c "import json,sys; d=json.load(sys.stdin); print(d.get('level','?'))" 2>/dev/null || echo "?")
+  green "Loop readiness level: $level"
+else
+  yellow "loop-engineering/ not initialized"
+fi
+echo ""
+
 echo "---"
 printf "Results: \033[32m%d pass\033[0m, \033[33m%d warn\033[0m, \033[31m%d fail\033[0m\n" "$PASS" "$WARN" "$FAIL"
 

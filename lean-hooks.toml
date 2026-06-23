@@ -67,3 +67,15 @@ enabled = true
 #
 # [project."my-project".override."multiagent-detect"]
 # timeout = 30
+
+# Loop Engineering subsystem
+# Plugin hooks (auto-discovered from hooks/ directory, documented here for visibility):
+#   SessionStart_08--loop-budget-check.sh  — budget warnings at session start
+#   Stop_10--loop-failure-check.sh         — failure detection on session end
+
+[loop_engineering]
+enabled = true
+budget_alert_threshold = 80
+budget_kill_threshold = 100
+failure_check_on_stop = true
+activity_stale_days = 7

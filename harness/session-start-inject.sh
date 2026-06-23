@@ -163,6 +163,23 @@ if plugin_context.strip():
         "[Plugin Output]\n" + plugin_context.strip()
     )
 
+# --- Injection 7: Loop failure alerts ---
+failure_report = os.path.join(harness_root, "config", "loop-engineering", "failure-report.json")
+if os.path.isfile(failure_report):
+    try:
+        with open(failure_report, encoding="utf-8") as f:
+            failures = json.load(f)
+        critical = [f for f in failures.get("failures", []) if f.get("severity") == "critical"]
+        if critical:
+            alerts = [f"  {c['mode']}: {c['pattern']} — {c['detail']}" for c in critical[:3]]
+            reminders.append(
+                "[LoopFailure] CRITICAL failure(s) detected:\n"
+                + "\n".join(alerts)
+                + "\n  Run: loop-failure-detector.py report  for details"
+            )
+    except Exception:
+        pass
+
 # Persist backfill hint
 if updated and met:
     for k, v in updated.items():
