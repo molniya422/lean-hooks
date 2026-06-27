@@ -8,7 +8,7 @@ Write-Host "=== lean-hooks Installer (Windows) ==="
 Write-Host "Target: $Target"
 
 # Create directories
-$dirs = @("harness", "skill-feedback", "multiagent-feedback", "rules", "memory", "projects", "data", "hooks", "archive")
+$dirs = @("harness", "training-loop", "skill-feedback", "multiagent-feedback", "rules", "memory", "projects", "data", "hooks", "archive")
 foreach ($d in $dirs) {
     New-Item -ItemType Directory -Force -Path "$Target\$d" | Out-Null
 }
@@ -17,6 +17,12 @@ foreach ($d in $dirs) {
 Write-Host "[1/3] Installing harness scripts..."
 Copy-Item "$Source\harness\*.sh" "$Target\harness\" -Force
 Copy-Item "$Source\harness\*.py" "$Target\harness\" -Force
+
+# Copy training-loop Python modules
+Write-Host "  Installing training-loop modules..."
+Copy-Item "$Source\training-loop\*.py" "$Target\training-loop\" -Force -ErrorAction SilentlyContinue
+Copy-Item "$Source\training-loop\*.json" "$Target\training-loop\" -Force -ErrorAction SilentlyContinue
+Copy-Item "$Source\training-loop\*.md" "$Target\training-loop\" -Force -ErrorAction SilentlyContinue
 
 # Copy templates
 Write-Host "[2/3] Installing templates..."
@@ -50,7 +56,7 @@ if (Test-Path "$Source\hooks") {
     Write-Host "  Copied example plugins"
 }
 
-Write-Host "[4/4] Veriving..."
+Write-Host "[4/4] Verifying..."
 $Py = if (Get-Command python3 -ErrorAction SilentlyContinue) { "python3" } else { "python" }
 try {
     $ver = & $Py --version 2>&1
@@ -58,3 +64,17 @@ try {
 } catch {
     Write-Host "  WARNING: Python not found. Set HARNESS_PYTHON env var."
 }
+
+# DB migration check
+if (Test-Path "$Target\harness\db-migrate.py") {
+    Write-Host "  Running db-migrate --dry-run..."
+    try { & $Py "$Target\harness\db-migrate.py" --dry-run 2>$null } catch {}
+}
+
+Write-Host ""
+Write-Host "=== Installation complete ==="
+Write-Host "Next steps:"
+Write-Host "  1. Review $Target\settings.json — ensure hooks match your setup"
+Write-Host "  2. Set HARNESS_PYTHON if Python is in a non-standard location"
+Write-Host "  3. (Optional) Set SKILL_ATTENTION_MODEL_DIR for semantic skill matching"
+Write-Host "  4. Restart Claude Code"

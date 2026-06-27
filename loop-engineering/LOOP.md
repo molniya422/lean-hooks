@@ -18,6 +18,7 @@ last_audit_level: "L0"
 | changelog-drafter | L0 | inactive | never | 0 |
 | post-merge-cleanup | L0 | inactive | never | 0 |
 | issue-triage | L0 | inactive | never | 0 |
+| role-collab | L0 | inactive | never | 0 |
 
 ## Multi-Loop Coordination Rules
 

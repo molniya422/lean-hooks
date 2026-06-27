@@ -30,7 +30,7 @@ from pathlib import Path
 
 # --- path resolution ---
 SCRIPT_DIR = Path(__file__).resolve().parent
-HARNESS_ROOT = Path(os.environ.get("HARNESS_ROOT", SCRIPT_DIR.parent)).resolve()
+HARNESS_ROOT = Path(os.environ.get("HARNESS_ROOT", str(SCRIPT_DIR.parent.parent))).resolve()
 CONFIG_DIR = HARNESS_ROOT / "config" if (HARNESS_ROOT / "config").exists() else HARNESS_ROOT
 MEM_DB = HARNESS_ROOT / "data" / "claude-mem" / "claude-mem.db"
 FEEDBACK_FILE = CONFIG_DIR / "training-loop" / "feedback.md"
@@ -55,17 +55,28 @@ def query_db(query: str, params: tuple = ()) -> list[tuple]:
 
 def parse_feedback_section(text: str, section: str) -> list[str]:
     """Extract entries from a feedback.md section."""
-    block_re = rf"^##\s+{re.escape(section)}.*?(?=^##|\Z)"
+    block_re = rf"^##\s+{re.escape(section)}.*?(?=^##[^#]|\Z)"
     m = re.search(block_re, text, re.MULTILINE | re.DOTALL | re.IGNORECASE)
     if not m:
         return []
     block = m.group(0)
-    # Extract ### sub-entries
     entries = []
     for line in block.split("\n"):
         if line.startswith("### "):
             entries.append(line[4:].strip())
     return entries
+
+
+def count_feedback_entries(text: str, section: str, labels: dict[str, str]) -> dict[str, int]:
+    """Count TP/FP/FN entries under a ## section — same logic as training-collect.py."""
+    block_re = rf"^##\s+{re.escape(section)}.*?(?=^##[^#]|\Z)"
+    m = re.search(block_re, text, re.MULTILINE | re.DOTALL | re.IGNORECASE)
+    block = m.group(0) if m else ""
+    counts = {}
+    for key, label in labels.items():
+        pat = rf"^###\s+{re.escape(label)}(?:\s+.+|$)"
+        counts[key] = len(re.findall(pat, block, re.MULTILINE))
+    return counts
 
 
 def parse_errors_md(text: str) -> list[dict]:
@@ -85,13 +96,30 @@ def parse_errors_md(text: str) -> list[dict]:
     return entries
 
 
+def get_effective_session_count() -> int:
+    """Get session count from meta.json (authoritative) or fall back to DB."""
+    if META_FILE.exists():
+        try:
+            meta = json.loads(META_FILE.read_text(encoding="utf-8"))
+            return meta.get("sessions", 0)
+        except Exception:
+            pass
+    # Fallback: query DB directly
+    rows = query_db("SELECT COUNT(*) as c FROM session_logs")
+    return rows[0]["c"] if rows else 0
+
+
 def cmd_sessions(days: int | None = None, json_output: bool = False):
     """Show session log statistics."""
     rows = query_db(
         "SELECT id, project, created_at, summary, files_touched FROM session_logs ORDER BY id DESC"
     )
     if not rows:
-        print("  No session logs found.")
+        effective = get_effective_session_count()
+        if effective > 0:
+            print(f"  Sessions: {effective} (from meta.json, no DB records accessible)")
+        else:
+            print("  No session logs found.")
         return
 
     if days:
@@ -102,7 +130,10 @@ def cmd_sessions(days: int | None = None, json_output: bool = False):
         print(json.dumps([dict(r) for r in rows], indent=2, ensure_ascii=False))
         return
 
-    print(f"  Total sessions: {len(rows)}")
+    effective = get_effective_session_count()
+    db_count = len(rows)
+    count_note = f"  Total sessions: {effective}" + (f" (DB has {db_count} rows)" if effective != db_count else "")
+    print(count_note)
     print(f"  Date range: {rows[-1]['created_at'][:10]} to {rows[0]['created_at'][:10]}")
     print()
 
@@ -150,7 +181,7 @@ def cmd_hooks(days: int | None = None, json_output: bool = False):
         print(f"    [{e['timestamp']}] {e['hook']} exit={e['exit_code']} ({e['error'][:40]})")
 
 
-def cmd_skills(json_output: bool = False):
+def cmd_skills(days: int | None = None, json_output: bool = False):
     """Show SkillOpt feedback analysis."""
     if not FEEDBACK_FILE.exists():
         print("  No training-loop/feedback.md found.")
@@ -158,15 +189,17 @@ def cmd_skills(json_output: bool = False):
 
     text = FEEDBACK_FILE.read_text(encoding="utf-8")
     entries = parse_feedback_section(text, "SkillOpt")
+    counts = count_feedback_entries(text, "SkillOpt", {"tp": "Correct Trigger", "fp": "False Positive", "fn": "Miss"})
 
     if json_output:
-        print(json.dumps({"entries": entries}, indent=2, ensure_ascii=False))
+        print(json.dumps({"entries": entries, "counts": counts}, indent=2, ensure_ascii=False))
         return
 
     print(f"  SkillOpt entries: {len(entries)}")
     sub_counts = Counter(entries)
     for sub, count in sub_counts.most_common():
         print(f"    {sub}: {count}")
+    print(f"  TP/FP/FN: {counts['tp']}/{counts['fp']}/{counts['fn']} (total signals: {sum(counts.values())})")
 
     # Also show meta.json if exists
     if META_FILE.exists():
@@ -183,7 +216,7 @@ def cmd_skills(json_output: bool = False):
             print(f"  Weighted F1: {w.get('weighted_f1', 'N/A')}")
 
 
-def cmd_multiagent(json_output: bool = False):
+def cmd_multiagent(days: int | None = None, json_output: bool = False):
     """Show MultiAgentOpt analysis."""
     if not FEEDBACK_FILE.exists():
         print("  No training-loop/feedback.md found.")
@@ -191,15 +224,17 @@ def cmd_multiagent(json_output: bool = False):
 
     text = FEEDBACK_FILE.read_text(encoding="utf-8")
     entries = parse_feedback_section(text, "MultiAgentOpt")
+    counts = count_feedback_entries(text, "MultiAgentOpt", {"tp": "Correct Trigger", "fp": "False Positive", "fn": "Miss"})
 
     if json_output:
-        print(json.dumps({"entries": entries}, indent=2, ensure_ascii=False))
+        print(json.dumps({"entries": entries, "counts": counts}, indent=2, ensure_ascii=False))
         return
 
     print(f"  MultiAgentOpt entries: {len(entries)}")
     sub_counts = Counter(entries)
     for sub, count in sub_counts.most_common():
         print(f"    {sub}: {count}")
+    print(f"  TP/FP/FN: {counts['tp']}/{counts['fp']}/{counts['fn']} (total signals: {sum(counts.values())})")
 
     if META_FILE.exists():
         meta = json.loads(META_FILE.read_text(encoding="utf-8"))
@@ -212,7 +247,7 @@ def cmd_multiagent(json_output: bool = False):
                 print(f"  EMA: P={ema['precision']:.3f} R={ema['recall']:.3f} F1={ema['f1']:.3f}")
 
 
-def cmd_trends(json_output: bool = False):
+def cmd_trends(days: int | None = None, json_output: bool = False):
     """Show session trends over time."""
     rows = query_db(
         "SELECT id, project, created_at, has_substance FROM session_logs ORDER BY id"
@@ -245,9 +280,10 @@ def cmd_dashboard(days: int | None = None, json_output: bool = False):
     if json_output:
         data = {}
 
-        # Sessions
-        rows = query_db("SELECT COUNT(*) as c, MAX(created_at) as last FROM session_logs")
-        data["sessions"] = {"total": rows[0]["c"] if rows else 0, "last": rows[0]["last"] if rows else None}
+        # Sessions — use meta.json as authoritative source
+        effective = get_effective_session_count()
+        last = query_db("SELECT created_at FROM session_logs ORDER BY id DESC LIMIT 1")
+        data["sessions"] = {"total": effective, "last": last[0]["created_at"] if last else None}
 
         # Errors
         if ERRORS_FILE.exists():
@@ -260,8 +296,15 @@ def cmd_dashboard(days: int | None = None, json_output: bool = False):
         # Feedback counts
         if FEEDBACK_FILE.exists():
             text = FEEDBACK_FILE.read_text(encoding="utf-8")
+            dim_labels = {
+                "SkillOpt": {"tp": "Correct Trigger", "fp": "False Positive", "fn": "Miss"},
+                "MultiAgentOpt": {"tp": "Correct Trigger", "fp": "False Positive", "fn": "Miss"},
+                "ToolCallOpt": {"tp": "Positive", "fp": "Negative", "fn": "Missed Opportunity"},
+            }
             for section in ["SkillOpt", "MultiAgentOpt", "ToolCallOpt"]:
-                data[section] = {"entries": len(parse_feedback_section(text, section))}
+                labels = dim_labels[section]
+                counts = count_feedback_entries(text, section, labels)
+                data[section] = {"entries": len(parse_feedback_section(text, section)), "counts": counts}
 
         # Meta
         if META_FILE.exists():
@@ -272,7 +315,7 @@ def cmd_dashboard(days: int | None = None, json_output: bool = False):
         return
 
     rows = query_db("SELECT COUNT(*) as c FROM session_logs")
-    session_count = rows[0]["c"] if rows else 0
+    session_count = get_effective_session_count()
 
     print(f"  Sessions logged: {session_count}")
     print()

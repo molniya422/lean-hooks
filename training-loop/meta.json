@@ -1,0 +1,130 @@
+{
+  "version": "2.2",
+  "sessions": 1,
+  "last_session": "2026-06-27T08:00:59.387335+00:00",
+  "last_optimized": "",
+  "global": {
+    "ema_lambda": 0.1818,
+    "f1_target": 0.75,
+    "min_adjust_interval": 3,
+    "complexity_gamma": 0.15,
+    "min_signals_for_adjustment": 10,
+    "adjustment_enabled": false
+  },
+  "dimensions": {
+    "skill": {
+      "counts": {
+        "tp": 1,
+        "fp": 1,
+        "fn": 1
+      },
+      "metrics": {
+        "precision": 0.4999999975,
+        "recall": 0.4999999975,
+        "f1": 0.4999999925000001,
+        "has_data": true
+      },
+      "ema": {
+        "precision": 0.4999999975,
+        "recall": 0.4999999975,
+        "f1": 0.4999999925000001,
+        "loss": 0.49999999750000007,
+        "last_updated_session": 1,
+        "last_signal_count": 3
+      },
+      "loss": {
+        "core": 0.49999999750000007,
+        "complexity_penalty": 0.0,
+        "total": 0.49999999750000007
+      },
+      "complexity": {
+        "current": 0.0,
+        "target": 2.0
+      },
+      "threshold": 3,
+      "last_adjusted_session": 0,
+      "last_optimized": "",
+      "activity": {
+        "skill_invocations": 0,
+        "multiagent_dispatches": 0,
+        "tool_calls": 0
+      }
+    },
+    "multiagent": {
+      "counts": {
+        "tp": 1,
+        "fp": 1,
+        "fn": 1
+      },
+      "metrics": {
+        "precision": 0.4999999975,
+        "recall": 0.4999999975,
+        "f1": 0.4999999925000001,
+        "has_data": true
+      },
+      "ema": {
+        "precision": 0.4999999975,
+        "recall": 0.4999999975,
+        "f1": 0.4999999925000001,
+        "loss": 0.49999999750000007,
+        "last_updated_session": 1,
+        "last_signal_count": 3
+      },
+      "loss": {
+        "core": 0.49999999750000007,
+        "complexity_penalty": 0.0,
+        "total": 0.49999999750000007
+      },
+      "complexity": {
+        "current": 0.0,
+        "target": 0.5
+      },
+      "threshold": 3,
+      "last_adjusted_session": 0,
+      "last_optimized": "",
+      "activity": {
+        "skill_invocations": 0,
+        "multiagent_dispatches": 0,
+        "tool_calls": 0
+      }
+    },
+    "toolcall": {
+      "counts": {
+        "tp": 1,
+        "fp": 1,
+        "fn": 1
+      },
+      "metrics": {
+        "precision": 0.4999999975,
+        "recall": 0.4999999975,
+        "f1": 0.4999999925000001,
+        "has_data": true
+      },
+      "ema": {
+        "precision": 0.4999999975,
+        "recall": 0.4999999975,
+        "f1": 0.4999999925000001,
+        "loss": 0.49999999750000007,
+        "last_updated_session": 1,
+        "last_signal_count": 3
+      },
+      "loss": {
+        "core": 0.49999999750000007,
+        "complexity_penalty": 0.0,
+        "total": 0.49999999750000007
+      },
+      "complexity": {
+        "current": 0.0,
+        "target": 8.0
+      },
+      "threshold": 3,
+      "last_adjusted_session": 0,
+      "last_optimized": "",
+      "activity": {
+        "skill_invocations": 0,
+        "multiagent_dispatches": 0,
+        "tool_calls": 0
+      }
+    }
+  }
+}

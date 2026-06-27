@@ -15,6 +15,7 @@ Usage:
 
 import json
 import math
+import os
 import re
 import sys
 from datetime import datetime, timezone
@@ -62,7 +63,7 @@ def count_weighted_entries(text: str, dim_label: str, labels: dict[str, float],
     Count entries under a ## section with time decay weights.
     Returns weighted sums and raw counts.
     """
-    block_re = rf"^##\s+{re.escape(dim_label)}.*?(?=^##|\Z)"
+    block_re = rf"^##\s+{re.escape(dim_label)}.*?(?=^##[^#]|\Z)"
     m = re.search(block_re, text, re.MULTILINE | re.DOTALL | re.IGNORECASE)
     block = m.group(0) if m else ""
 
@@ -199,7 +200,7 @@ def main():
 
     # Auto-detect paths
     script_dir = Path(__file__).resolve().parent
-    harness_root = Path(os.environ.get("HARNESS_ROOT", script_dir.parent)).resolve()
+    harness_root = Path(os.environ.get("HARNESS_ROOT", str(script_dir.parent))).resolve()
 
     loop_dir = harness_root / "config" / "training-loop" if (harness_root / "config").exists() else harness_root / "training-loop"
     meta_path = args.meta or loop_dir / "meta.json"

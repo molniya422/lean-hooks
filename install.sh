@@ -26,6 +26,13 @@ cp "$SOURCE/harness/"*.sh "$TARGET/harness/"
 cp "$SOURCE/harness/"*.py "$TARGET/harness/"
 chmod +x "$TARGET/harness/"*.sh 2>/dev/null || true
 
+# Copy training-loop Python modules
+echo "  Installing training-loop modules..."
+mkdir -p "$TARGET/training-loop"
+cp "$SOURCE/training-loop/"*.py "$TARGET/training-loop/" 2>/dev/null || true
+cp "$SOURCE/training-loop/"*.json "$TARGET/training-loop/" 2>/dev/null || true
+cp "$SOURCE/training-loop/"*.md "$TARGET/training-loop/" 2>/dev/null || true
+
 # Copy templates
 echo "[2/4] Installing templates..."
 cp "$SOURCE/templates/skill-feedback/"*.json "$TARGET/skill-feedback/" 2>/dev/null || true
@@ -80,12 +87,19 @@ else
     echo "  WARNING: Python not found. Set HARNESS_PYTHON=/path/to/python"
 fi
 
+# DB migration check
+if [ -n "$PY" ] && [ -f "$TARGET/harness/db-migrate.py" ]; then
+    echo "  Running db-migrate --dry-run..."
+    "$PY" "$TARGET/harness/db-migrate.py" --dry-run 2>/dev/null || true
+fi
+
 echo ""
 echo "=== Installation complete ==="
 echo "Next steps:"
 echo "  1. Review $TARGET/settings.json — ensure hooks match your setup"
 echo "  2. Set HARNESS_PYTHON if Python is in a non-standard location"
-echo "  3. Restart Claude Code"
+echo "  3. (Optional) Set SKILL_ATTENTION_MODEL_DIR for semantic skill matching"
+echo "  4. Restart Claude Code"
 echo ""
 echo "To disable hooks temporarily:"
 echo "  export DISABLED_HOOKS=\"multiagent-detect\""

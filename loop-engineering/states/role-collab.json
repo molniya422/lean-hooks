@@ -1,0 +1,11 @@
+{
+  "pattern": "role-collab",
+  "level": "L0",
+  "status": "inactive",
+  "last_run": null,
+  "run_count": 0,
+  "consecutive_failures": 0,
+  "active_tasks": [],
+  "max_review_cycles": 3,
+  "notes": "Blank initial state. Activate via loop-engineering skill."
+}

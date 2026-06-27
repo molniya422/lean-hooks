@@ -79,3 +79,16 @@ budget_alert_threshold = 80
 budget_kill_threshold = 100
 failure_check_on_stop = true
 activity_stale_days = 7
+
+[[hook]]
+name = "skill-attention-query"
+file = "harness/skill-attention-query.sh"
+events = ["UserPromptSubmit"]
+timeout = 15
+enabled = false
+
+[data_lifecycle]
+enabled = true
+memory_rotation_kb = 64
+session_archive_days = 90
+errors_prune_kb = 1024

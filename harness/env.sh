@@ -164,7 +164,7 @@ fi
 export _LOADED_HOOKS_CFG
 
 if [ -z "${CHROME_EXE:-}" ]; then
-    CHROME_EXE="D:/Chromium/Application/chrome.exe"
+    CHROME_EXE=""
 fi
 
 AGENT_BROWSER_DIR="$HARNESS_ROOT/runtime/npm/node_modules/agent-browser"

@@ -278,3 +278,44 @@ patterns:
       cost: "~5K tokens/run"
       observability: "run-log.jsonl + state file"
       safety: "Never close issues without clear duplicate evidence. Never modify issue assignees without confirmation."
+
+  - name: role-collab
+    description: "Multi-agent parallel review: Maker/Reviewer/Tester/Architect with veto gates"
+    cadence: "on-demand"
+    trigger: "manual"
+    risk: "medium"
+    skills:
+      maker: "role-collab"
+      checker: "verification-before-completion"
+    tools: ["Agent", "Read", "Edit", "Bash", "Grep"]
+    state_file: "role-collab.json"
+    phases:
+      L1: "propose-only: show orchestration plan, no agent dispatch"
+      L2: "assisted: dispatch agents with human gate at DECISION phase"
+      L3: "unattended: full auto-decide (accept/reject without human)"
+    human_gates:
+      L1: false
+      L2: true
+      L3: false
+    week_one_mode: "L1"
+    token_cost:
+      per_run: 80000
+      daily_cap: 500000
+    path_allowlist:
+      - "src/**"
+      - "tests/**"
+    path_denylist:
+      - ".env"
+      - "*.key"
+      - "*.secret*"
+    checklist:
+      purpose: "Orchestrate parallel multi-agent code review with role-based veto"
+      scheduling: "Manual trigger only"
+      skills: "role-collab = maker, verification-before-completion = checker"
+      maker_checker: "L2+: role-collab dispatches Maker agent, 3 parallel Reviewer/Tester/Architect agents as checkers"
+      state: "role-collab.json tracks active tasks, verdicts, review cycles"
+      human_handoff: "L2: human confirms DECISION; L3: auto-decide with escalation on vetoes"
+      connectors: "Agent tool (Claude Code), role-collab-runner.py"
+      cost: "~80K tokens/run (3-4 agents), ~500K daily cap"
+      observability: "run-log.jsonl + role-collab.json state"
+      safety: "Max 3 review cycles. Tester FAIL = mandatory fix. Architect RISK = human escalation. Budget kill switch at 100%."

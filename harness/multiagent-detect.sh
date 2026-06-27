@@ -39,7 +39,7 @@ WEIGHTS = {
     "strong_multiagent": 3, "moderate_multiagent": 2, "weak_multiagent": 1,
     "structure_bonus": 1, "short_penalty": -3, "greeting_penalty": -2,
 }
-STRONG = ["parallel agents", "parallel agent", "同时处理", "多个 agent", "多个agent", "dispatch agents", "并行 agent", "并行agent", "parallel tasks", "parallel execution"]
+STRONG = ["parallel agents", "parallel agent", "同时处理", "多个 agent", "多个agent", "dispatch agents", "并行 agent", "并行agent", "parallel tasks", "parallel execution", "role-collab", "多角色协同", "并行审查"]
 MODERATE = ["fix A and refactor B", "fix and refactor", "implement and test", "review and merge", "一边.*一边", "同时.*和.*", "一起.*和.*", "both.*and.*", "fix.*then.*add"]
 WEAK = ["能不能.*然后", "能不能.*再", "先.*然后.*再", "please.*then.*", "also.*need.*", "in addition", "additionally", "还有.*需要.*", "另外.*还要.*"]
 GREETINGS = ["hello", "hi", "hey", "你好", "您好", "早上好", "晚上好", "在吗", "在嘛"]
@@ -215,7 +215,7 @@ WEIGHTS = {
 }
 
 # Keywords
-STRONG = ["parallel agents", "parallel agent", "同时处理", "多个 agent", "多个agent", "dispatch agents", "并行 agent", "并行agent", "parallel tasks", "parallel execution"]
+STRONG = ["parallel agents", "parallel agent", "同时处理", "多个 agent", "多个agent", "dispatch agents", "并行 agent", "并行agent", "parallel tasks", "parallel execution", "role-collab", "多角色协同", "并行审查"]
 MODERATE = ["fix A and refactor B", "fix and refactor", "implement and test", "review and merge", "一边.*一边", "同时.*和.*", "一起.*和.*", "both.*and.*", "fix.*then.*add"]
 WEAK = ["能不能.*然后", "能不能.*再", "先.*然后.*再", "please.*then.*", "also.*need.*", "in addition", "additionally", "还有.*需要.*", "另外.*还要.*"]
 GREETINGS = ["hello", "hi", "hey", "你好", "您好", "早上好", "晚上好", "在吗", "在嘛"]

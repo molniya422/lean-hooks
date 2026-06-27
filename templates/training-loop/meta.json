@@ -1,23 +1,75 @@
 {
+  "version": "2.2",
   "sessions": 0,
   "last_session": "",
   "last_optimized": "",
+  "global": {
+    "ema_lambda": 0.1818,
+    "f1_target": 0.75,
+    "min_adjust_interval": 3,
+    "complexity_gamma": 0.15,
+    "min_signals_for_adjustment": 10,
+    "adjustment_enabled": false
+  },
   "dimensions": {
     "skill": {
-      "misses": 0,
-      "false_positives": 0,
+      "counts": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "metrics": {},
+      "ema": {},
+      "loss": {},
+      "complexity": {
+        "current": 0.0,
+        "target": 2.0
+      },
       "threshold": 3,
+      "threshold_config": null,
+      "last_adjusted_session": 0,
       "last_optimized": ""
     },
     "multiagent": {
-      "misses": 0,
-      "false_positives": 0,
+      "counts": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "metrics": {},
+      "ema": {},
+      "loss": {},
+      "complexity": {
+        "current": 0.0,
+        "target": 0.5
+      },
       "threshold": 3,
+      "threshold_config": {
+        "current_value": 3,
+        "min_value": 1,
+        "max_value": 10,
+        "config_file": "",
+        "config_pattern": "PHASE[12]_TRIGGER"
+      },
+      "last_adjusted_session": 0,
       "last_optimized": ""
     },
     "toolcall": {
-      "observations": 0,
+      "counts": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 0
+      },
+      "metrics": {},
+      "ema": {},
+      "loss": {},
+      "complexity": {
+        "current": 0.0,
+        "target": 8.0
+      },
       "threshold": 3,
+      "threshold_config": null,
+      "last_adjusted_session": 0,
       "last_optimized": ""
     }
   }

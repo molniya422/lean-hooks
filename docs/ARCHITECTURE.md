@@ -21,6 +21,15 @@ Each script sources `harness/env.sh` for Python detection (`$PY`) and config roo
 
 ## New in v2: Enhanced Architecture
 
+### TrainingLoop v2.2 — Signal-Count EMA & Vacuous Correctness Fix
+
+Key changes from v2.1:
+- **metrics_core.py**: Shared computation module for P/R/F1/EMA/loss/adjustment logic. Eliminates duplicate code between training-collect.py and adaptive-threshold.py.
+- **Signal-count EMA**: EMA updates only when new feedback signals arrive (not on every session). Prevents stale EMA from drifting.
+- **Vacuous correctness fix**: When TP=FP=FN=0, `has_data=False` with P/R/F1=None instead of P=R=F1=1.0.
+- **Adjustment gating**: `adjustment_enabled=false` (master kill-switch) until >=50 total signals globally. `min_signals_for_adjustment=10` per-dimension minimum before thresholds can auto-change.
+- **adaptivethreshold.py**: Standalone optimizer using dual-layout `resolve_ecosystem_root()` that supports both `config/training-loop/` and `training-loop/` paths.
+
 ### Error Handling (error-handler.sh)
 
 Every hook is automatically wrapped with:
@@ -72,6 +81,41 @@ Naming convention: `<Event>[_<Priority>]--<Name>.sh`. Default priority = 100.
 │  ERRORS.md > 1MB  ──► archive/ERRORS.YYYY-MM-DD.md              │
 └──────────────────────────────────────────────────────────────────┘
 ```
+
+### Skill Attention Layer (Optional)
+
+ONNX-based semantic skill matching that augments the keyword-based skill trigger system:
+
+```
+User prompt ──► skill-attention-query.sh ──► skill-attention.py
+                     │                           │
+                     │ (skip if no model)        ├─► Encode prompt (all-MiniLM-L6-v2 ONNX)
+                     │                           ├─► Cosine similarity vs pre-computed utterances
+                     │                           ├─► Gate with per-skill attention weights
+                     │                           └─► Inject top-K matches into AI context
+                     │
+                     └──► (no model) ──► silent skip, continue session
+```
+
+**Configuration**: Set `SKILL_ATTENTION_MODEL_DIR` to the ONNX model directory. Set `SKILL_ATTENTION_PYTHON` to a Python interpreter with `onnxruntime` and `tokenizers` installed. Both default to empty — the system gracefully degrades to keyword-only matching when not configured.
+
+**Feedback loop**: Correct triggers boost attention weights (+0.02), false positives suppress (-0.05), misses add user prompt as new utterance (+0.03 boost).
+
+### DB Schema Migration (db-migrate.py)
+
+Manages SQLite schema evolution for the claude-mem database. Detects current version, applies pending migrations, and supports `--dry-run` for preview.
+
+### Role-Collab Orchestrator (role-collab-runner.py)
+
+Multi-agent parallel review protocol with three roles and veto gates:
+
+```
+Phase 1: IMPLEMENT ──► Maker agent produces code
+Phase 2: REVIEW    ──► 3 parallel agents: Reviewer / Tester / Architect
+Phase 3: DECISION  ──► Collect verdicts → apply veto rules → ACCEPT/REVISE/ESCALATE
+```
+
+Veto rules: Tester FAIL = mandatory fix. Architect RISK = human escalation. Max 3 review cycles before forced escalation. State tracked in `loop-engineering/states/role-collab.json`.
 
 ### Weighted Scoring (weighted-scoring.py)
 
@@ -187,17 +231,24 @@ Users explicitly save lessons via "remember this" or at the end of debugging ses
 │   ├── multiagent-detect.sh
 │   ├── training-collect.sh
 │   ├── auto-summary.py
-│   ├── training-collect.py
+│   ├── training-collect.py          ← v2.2 metrics engine
 │   ├── data-lifecycle.py            ← rotation/archiving (new)
 │   ├── weighted-scoring.py          ← enhanced F1 scoring (new)
 │   ├── stats.py                     ← query CLI (new)
-│   └── test_all.py                  ← integration tests (new)
+│   ├── test_all.py                  ← integration tests (new)
+│   ├── db-migrate.py                ← SQLite schema migration (new)
+│   ├── role-collab-runner.py        ← multi-role collaboration (new)
+│   ├── skill-attention.py           ← ONNX semantic matching (optional, new)
+│   └── skill-attention-query.sh     ← hook wrapper for skill-attention (new)
 ├── hooks/                           ← drop-in plugin directory (new)
 │   └── SessionStart_10--custom-health.sh
 ├── training-loop/
 │   ├── feedback.md                  ← unified feedback (all 3 dims)
 │   ├── meta.json                    ← counters + EMA + weighted scores
-│   └── metrics-design.md
+│   ├── metrics_core.py              ← shared P/R/F1/EMA/loss computation (v2.2)
+│   ├── adaptive-threshold.py        ← standalone threshold optimizer (v2.2)
+│   ├── metrics-design.md           ← ML formula docs
+│   └── metrics-schema.json         ← JSON Schema
 ├── skill-feedback/                  ← (legacy, migration to training-loop/)
 ├── multiagent-feedback/             ← (legacy, migration to training-loop/)
 ├── rules/                           ← language-specific rule files
@@ -218,7 +269,7 @@ Users explicitly save lessons via "remember this" or at the end of debugging ses
 | `env` | env.sh detection, path resolution |
 | `multiagent` | Phase 1/2 scoring, --dry-run output |
 | `summary` | auto-summary.py DB write |
-| `metrics` | training-collect.py F1/EMA computation |
+| `metrics` | training-collect.py F1/EMA computation, metrics_core shared logic |
 | `lifecycle` | data-lifecycle.py rotation/archive |
 
 Run: `python harness/test_all.py`

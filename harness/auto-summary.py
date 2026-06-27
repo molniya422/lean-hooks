@@ -17,6 +17,7 @@ Usage:
 
 import json
 import os
+import re
 import sqlite3
 import sys
 from datetime import datetime, timezone
@@ -74,6 +75,13 @@ def find_db():
     return os.path.join(data_dir, "claude-mem.db")
 
 
+def column_exists(conn, table, column):
+    if not re.match(r'^[A-Za-z_]\w*$', table):
+        return False
+    cur = conn.execute(f"PRAGMA table_info({table})")
+    return any(row[1] == column for row in cur.fetchall())
+
+
 def ensure_schema(conn):
     conn.execute(
         """CREATE TABLE IF NOT EXISTS session_logs (
@@ -94,6 +102,15 @@ def ensure_schema(conn):
         "CREATE INDEX IF NOT EXISTS idx_session_logs_created "
         "ON session_logs(created_epoch DESC)"
     )
+    # Defensive: add evolution columns if db-migrate.py hasn't run yet
+    for col_name, col_type, default in [
+        ("expires_at_epoch", "INTEGER", "NULL"),
+        ("quality_score", "REAL", "0.5"),
+    ]:
+        if not column_exists(conn, "session_logs", col_name):
+            conn.execute(
+                f"ALTER TABLE session_logs ADD COLUMN {col_name} {col_type} DEFAULT {default}"
+            )
 
 
 def parse_input():
@@ -159,10 +176,19 @@ def main():
     conn = sqlite3.connect(db_path)
     try:
         ensure_schema(conn)
+
+        # Compute quality_score and expires_at_epoch for the new row
+        quality_score = 0.7 if has_substance is True or has_substance is None else 0.1
+        # has_substance=0 sessions expire after 30d; substantive ones get 90d
+        if has_substance is None and not summary:
+            expires_at_epoch = now_epoch + 30 * 86400
+        else:
+            expires_at_epoch = now_epoch + 90 * 86400
+
         conn.execute(
-            "INSERT INTO session_logs (project, created_at, created_epoch, summary, files_touched, has_substance) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (record.get("project", "unknown"), now_iso, now_epoch, summary, files, 1),
+            "INSERT INTO session_logs (project, created_at, created_epoch, summary, files_touched, has_substance, quality_score, expires_at_epoch) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (record.get("project", "unknown"), now_iso, now_epoch, summary, files, 1, quality_score, expires_at_epoch),
         )
         conn.commit()
         print(f"auto-summary: logged [{record.get('project')}] {summary[:60]}{'...' if len(summary) > 60 else ''}")

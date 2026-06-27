@@ -1,29 +1,27 @@
 # lean-hooks
 
-> A lightweight, zero-dependency automation harness for Claude Code — hooks, memory, skill optimization, multi-agent detection, **and loop engineering**. With timeout-safe error handling, plugin system, stats CLI, weighted scoring, data lifecycle management, **and loop readiness governance**.
-
-**10 hook scripts + 13 utility modules + 6 loop-engineering scripts. Zero external dependencies. Single-command install.**
+> A portable, zero-dependency automation harness for Claude Code. Hooks, memory, skill optimization, multi-agent detection, semantic attention, and loop engineering — all in one install.
 
 ---
 
-## What It Does
+## Why lean-hooks?
 
-lean-hooks turns Claude Code's hook events (`SessionStart`, `UserPromptSubmit`, `Stop`) into a complete **event-driven context injection framework** with three autonomous feedback loops:
+Claude Code has hook events (`SessionStart`, `UserPromptSubmit`, `Stop`) but no built-in system to remember across sessions, improve its own behavior, or govern automated loops. lean-hooks fills that gap:
 
-| Loop | What It Governs | Data Store |
-|---|---|---|
-| **Memory** | Cross-session knowledge persistence | `memory/*.md` + SQLite `session_logs` |
-| **TrainingLoop** | Behavioral quality (skill/multiagent/tool accuracy) | `training-loop/feedback.md` + `meta.json` |
-| **Loop Engineering** | Automated loop governance (state, budget, failures) | `loop-engineering/states/` + `run-log.jsonl` + `budget.json` |
+- **Never repeat work** — cross-session memory + SQLite session logs
+- **Get better over time** — behavioral quality feedback loop with EMA/F1 metrics
+- **Detect complexity** — two-phase heuristic suggests parallel agents when tasks warrant it
+- **Govern automation** — loop engineering with budget kill switches, failure detection, and readiness levels
+- **Match skills semantically** — ONNX embedding layer finds the right skill for the right prompt (optional)
 
-Hooks don't execute AI operations directly — they **inject context** (reminders, alerts, suggestions) into the AI's working memory. The AI retains judgment over whether to act on them.
+All hooks **inject context** — they never execute AI operations directly. The AI retains judgment over whether to act.
 
 ---
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/naihenh/lean-hooks.git
+git clone https://github.com/molniya422/lean-hooks.git
 cd lean-hooks
 
 # Linux / macOS / WSL
@@ -32,7 +30,62 @@ cd lean-hooks
 # Windows PowerShell
 .\install.ps1
 
-# Done! Restart Claude Code.
+# Done. Restart Claude Code.
+```
+
+No Python packages to install. No Node dependencies. Just bash + Python 3.8+.
+
+---
+
+## How It Works
+
+Three autonomous feedback loops, wired into Claude Code's hook events:
+
+```
+Session Start ──► health-check + security-audit + memory inject + F1 alerts + budget warnings
+
+User sends message ──► completion keyword detect + parallel agent suggestion + skill attention match
+
+Session End ──► training-collect (P/R/F1/EMA) + loop failure scan + budget tracking
+```
+
+### Loop 1: Memory
+
+```
+Session with substance ──► auto-summary.py ──► SQLite session_logs
+User says "remember"   ──► memory/*.md     ──► MEMORY.md index
+Next session           ──► injected memory hint ──► AI searches before repeating work
+```
+
+### Loop 2: TrainingLoop
+
+```
+AI observes quality issue ──► writes feedback.md (3 dimensions)
+Session Stop              ──► training-collect.py computes P/R/F1/EMA/loss
+F1 < target (3+ sessions) ──► auto-adjusts multiagent threshold
+Next SessionStart        ──► F1 alert injected ──► AI self-corrects
+```
+
+Three dimensions tracked:
+
+| Dimension | What It Measures | Feedback Types |
+|---|---|---|
+| **SkillOpt** | Skill trigger accuracy | Correct / Miss / False Positive |
+| **MultiAgentOpt** | Agent dispatch accuracy | Correct / Miss / False Positive |
+| **ToolCallOpt** | Tool call quality | Positive / Negative / Missed Opportunity |
+
+Loss function: `L = [(1-P)² + (1-R)²] / [(1-P)+(1-R)+ε] + γ·complexity`
+
+**v2.2 safety gates**: System starts in L0 (report-only) mode. Auto-adjustment disabled until ≥50 feedback signals globally, ≥10 per dimension. Zero signals → `has_data=False` (not vacuous P=R=F1=1.0).
+
+### Loop 3: Loop Engineering
+
+```
+Loop executes  ──► run-logger.py records audit trail
+State changes  ──► state-manager.py per-pattern state
+Tokens used    ──► budget-tracker.py daily/weekly caps
+Session Stop   ──► failure-detector.py scans 9 failure modes
+Next Start     ──► budget warnings + critical failure alerts
 ```
 
 ---
@@ -45,10 +98,10 @@ cd lean-hooks
 ├── settings.json                ← hook chain wired here
 ├── CLAUDE.md                    ← behavioral rules + skill trigger table
 │
-├── harness/                     ← all scripts (20 files)
-│   ├── env.sh                   ← shared Python/root/path detection
-│   ├── error-handler.sh         ← timeout + error logging
-│   ├── plugin-loader.sh         ← plugin auto-registration
+├── harness/                     ← all hook scripts
+│   ├── env.sh                   ← Python/root/path detection (dual-layout)
+│   ├── error-handler.sh         ← timeout + non-blocking error logging
+│   ├── plugin-loader.sh         ← drop-in plugin auto-registration
 │   │
 │   ├── health-check.sh          ← 9-section integrity validation
 │   ├── security-audit.sh        ← .env / plaintext key scanner
@@ -57,183 +110,90 @@ cd lean-hooks
 │   ├── multiagent-detect.sh     ← two-phase parallel agent scorer
 │   ├── training-collect.sh/py   ← 3-dimension EMA metrics engine
 │   │
-│   ├── auto-summary.py          ← Tier1 session log → SQLite
+│   ├── auto-summary.py          ← session log → SQLite
 │   ├── data-lifecycle.py        ← MEMORY.md rotation + archival
 │   ├── weighted-scoring.py      ← time-decay F1 + trend analysis
-│   ├── stats.py                 ← query CLI (sessions, hooks, skills)
+│   ├── stats.py                 ← query CLI
 │   ├── test_all.py              ← integration test suite
+│   ├── db-migrate.py            ← SQLite schema migration
+│   ├── role-collab-runner.py    ← multi-role parallel review orchestrator
+│   ├── skill-attention.py       ← ONNX semantic skill matching (optional)
+│   ├── skill-attention-query.sh ← hook wrapper for skill-attention
 │   │
-│   ├── loop-state-manager.py    ← per-pattern state CRUD + rot detection
-│   ├── loop-run-logger.py       ← append-only JSONL audit trail
-│   ├── loop-budget-tracker.py   ← token budget + 80%/100% kill switch
-│   ├── loop-readiness-audit.py  ← 0-100 scoring + L0→L3 levels
-│   ├── loop-failure-detector.py ← 9 failure mode runtime detection
-│   └── loop-checklist-validator.py ← 10-section design checklist
+│   │  // loop-engineering scripts
+│   ├── loop-state-manager.py
+│   ├── loop-run-logger.py
+│   ├── loop-budget-tracker.py
+│   ├── loop-readiness-audit.py
+│   ├── loop-failure-detector.py
+│   └── loop-checklist-validator.py
 │
 ├── hooks/                       ← drop-in plugin directory
-│   ├── SessionStart_08--loop-budget-check.sh
-│   ├── SessionStart_10--custom-health.sh
-│   └── Stop_10--loop-failure-check.sh
+├── training-loop/               ← feedback + metrics
+│   ├── feedback.md
+│   ├── meta.json
+│   ├── metrics_core.py          ← shared computation (v2.2)
+│   ├── adaptive-threshold.py    ← standalone optimizer (v2.2)
+│   ├── metrics-design.md
+│   └── metrics-schema.json
 │
-├── training-loop/               ← SkillOpt + MultiAgentOpt + ToolCallOpt
-│   ├── feedback.md               ← unified feedback (3 sections)
-│   ├── meta.json                 ← EMA/F1/loss per dimension
-│   ├── adaptive-threshold.py     ← standalone threshold optimizer
-│   ├── metrics-design.md         ← ML formula documentation
-│   └── metrics-schema.json       ← JSON Schema
+├── loop-engineering/            ← loop governance
+│   ├── LOOP.md                  ← active loops + coordination
+│   ├── safety.md                ← path denylist + auto-merge rules
+│   ├── patterns/registry.yaml   ← 8 pattern definitions
+│   ├── states/                  ← per-pattern mutable state (8 files)
+│   ├── budget.json
+│   ├── run-log.jsonl
+│   ├── failure-report.json
+│   └── archive/
 │
-├── loop-engineering/            ← loop governance subsystem
-│   ├── LOOP.md                  ← active loops + coordination + rollout plan
-│   ├── safety.md                 ← path denylist + auto-merge policy
-│   ├── patterns/registry.yaml    ← 7 pattern definitions mapped to skills
-│   ├── states/                   ← per-pattern mutable state (7 .json)
-│   ├── budget.json               ← daily/weekly token caps + cost per pattern
-│   ├── run-log.jsonl             ← append-only execution audit trail
-│   ├── failure-report.json       ← current unresolved failure modes
-│   └── archive/                  ← pruned run logs
-│
-├── skills/                      ← task-routing skills
-│   ├── loop-engineer/SKILL.md    ← design new loops
-│   └── loop-audit/SKILL.md       ← audit loop readiness
-│
-├── data/                        ← SQLite DB (session_logs)
+├── data/                        ← SQLite DB
 ├── memory/                      ← MEMORY.md + per-project files
 └── ERRORS.md                    ← auto-generated error log
 ```
 
 ---
 
-## Hook Chain — What Runs When
+## Hook Chain
 
-| Event | Script | Injects Into AI Context |
+| Event | Script | What It Does |
 |---|---|---|
-| **SessionStart** | `health-check.sh` | 9-section integrity report (stdout, not context) |
-| | `security-audit.sh` | .env/gitignore warnings |
-| | `session-start-inject.sh` | 7 blocks: mandatory 3-step checklist, EMA F1 alerts, backfill hint, hooks control, loop failure alerts |
-| | `SessionStart_08--loop-budget-check.sh` | Budget WARNING at 80%, KILL at 100% |
-| | `SessionStart_10--custom-health.sh` | Custom project checks |
-| **UserPromptSubmit** | `post-task-detect.sh` | Completion reminder (Tier1/Tier2 write + TrainingLoop) when ~60 keywords detected |
-| | `multiagent-detect.sh` | Parallel agent suggestion when score ≥4 |
-| | `langgraph-router.sh` | LangGraph orchestration (experimental) |
-| **Stop** | `training-collect.sh` | Parses feedback → updates meta.json (EMA/F1) |
-| | `Stop_10--loop-failure-check.sh` | Scans 9 failure modes → updates failure-report.json |
-| **PreToolUse** | (matcher) | Blocks WebFetch/WebSearch (use `mcp__fetch__fetch` instead) |
-
----
-
-## Three Feedback Loops
-
-### 1. Memory — Cross-Session Knowledge
-
-```
-Session ends with substance → auto-summary.py → session_logs (SQLite)
-User says "记住/remember"  → memory/*.md + MEMORY.md index
-Next SessionStart          → inject memory index hint
-AI searches mem-search-lite before repeating work
-```
-
-### 2. TrainingLoop — Behavioral Quality
-
-```
-AI observes quality issue → writes feedback.md (SkillOpt/MultiAgentOpt/ToolCallOpt)
-Session Stop              → training-collect.py computes P/R/F1/EMA/loss
-F1 < 0.75 for 3+ sessions → auto-adjusts multiagent threshold
-Next SessionStart         → injects F1 alert → AI improves behavior
-```
-
-| Dimension | Tracks | Key Metric |
-|---|---|---|
-| SkillOpt | Skill trigger accuracy | EMA(F1) per skill pattern |
-| MultiAgentOpt | Parallel dispatch accuracy | EMA(F1) + threshold auto-tuning |
-| ToolCallOpt | Tool call quality | Positive/negative pattern tracking |
-
-Loss function: `L = [(1-P)² + (1-R)²] / [(1-P)+(1-R)+ε] + γ·complexity`
-
-### 3. Loop Engineering — Automated Loop Governance
-
-```
-Loop executes                     → run-logger.py records to run-log.jsonl
-State changes                     → state-manager.py updates states/<pattern>.json
-Tokens consumed                   → budget-tracker.py tracks daily usage
-Session Stop                      → failure-detector.py scans 9 failure modes
-Next SessionStart                 → budget warnings + critical failure alerts
-
-Readiness scored                  → readiness-audit.py: 0-100 → L0/L1/L2/L3
-Design validated                  → checklist-validator.py: 10-section gates
-```
-
-**9 Failure Modes Detected at Runtime:**
-
-| Mode | Detection | Severity |
-|---|---|---|
-| `infinite_fix_loop` | ≥3 consecutive partial outcomes + same pending items | critical |
-| `state_rot` | Pending items stale >7d, or consecutive failures ≥3 | high |
-| `verifier_theater` | Checker always passes, zero escalations | medium |
-| `notification_fatigue` | ≥5 escalations/24h with no human action | medium |
-| `token_burn` | Run exceeds 2× expected token cost | high |
-| `over_reach` | Actions outside declared tool scope | high |
-| `escalation_failure` | Escalated items unresolved >7 days | medium |
-| `dead_loop` | No run in 3× cadence period | medium |
-| `budget_blowout` | Daily usage >120% despite kill switch | critical |
-
----
-
-## 7 Loop Patterns
-
-| Pattern | Cadence | Risk | Maker Skill | Checker Skill |
-|---|---|---|---|---|
-| **Daily Triage** | 1d | low | `issue-triage` | `verification-before-completion` |
-| **PR Babysitter** | 5-15m | high | `babysit` | `requesting-code-review` |
-| **CI Sweeper** | 5-15m | very high | `systematic-debugging` | `verification-before-completion` |
-| **Dependency Sweeper** | 6h-1d | medium | `security-guardian` | `verification-before-completion` |
-| **Changelog Drafter** | 1d | low | `repo-recap` | `verification-before-completion` |
-| **Post-Merge Cleanup** | 1d-6h | low | `finishing-a-development-branch` | `verification-before-completion` |
-| **Issue Triage** | 2h-1d | low | `issue-triage` | `verification-before-completion` |
-
-Each pattern starts at **L1 (report-only)** and advances through L2 (assisted fixes) to L3 (unattended) only after proving reliability.
-
----
-
-## Loop Readiness Levels
-
-| Level | Score | What It Means |
-|---|---|---|
-| **L0** | 0-39 | Draft — infrastructure partial, no loops running |
-| **L1** | 40-64 | Report-only — can observe and categorize, no auto-actions |
-| **L2** | 65-84 | Assisted — maker/checker split + human gates for code changes |
-| **L3** | 85-100 | Unattended — full automation with verified safety guardrails |
-
-```bash
-python harness/loop-readiness-audit.py --suggest    # full audit + suggestions
-python harness/loop-readiness-audit.py --quick       # fast 3-point check
-```
+| **SessionStart** | `health-check.sh` | 9-section integrity validation |
+| | `security-audit.sh` | .env/gitignore scanning |
+| | `session-start-inject.sh` | Memory index + 3-step checklist + F1 alerts + loop failure alerts |
+| **UserPromptSubmit** | `post-task-detect.sh` | Detects ~60 completion keywords → write reminder |
+| | `multiagent-detect.sh` | Two-phase scoring → parallel agent suggestion |
+| | `skill-attention-query.sh` | Semantic skill matching (optional, disabled by default) |
+| **Stop** | `training-collect.sh` | Parses feedback → computes EMA/F1 → updates meta.json |
 
 ---
 
 ## Key Features
 
-### Error Handling — Non-Blocking by Design
+### Non-Blocking Error Handling
 
 ```
-[Hook] ──► timeout_wrap ──► success? ──► continue
-                          └── failure? ──► ERRORS.md ──► continue
+[Hook] ──► timeout_wrap ──► success ──► continue
+                          └── failure ──► ERRORS.md ──► continue
 ```
 
-No hook ever blocks your Claude session. All wrapped in `safe_run` with configurable timeouts from `lean-hooks.toml`.
+No hook ever blocks your session. Configurable timeouts via `lean-hooks.toml`.
 
-### Multi-Agent Detection — Two-Phase Heuristic
+### Multi-Agent Detection
+
+Two-phase heuristic: fast keyword filter (0 cost) → structural analysis (task verbs, file refs). Biases toward false negatives. Threshold auto-tightens/loosens based on F1.
 
 ```bash
-echo '{"prompt":"fix auth module and refactor login page"}' \
-  | bash harness/multiagent-detect.sh --dry-run
-# Phase 1 score: 2 (moderate_keyword)
-# Phase 2 score: 3 (moderate_keyword, multi_verb, multi_file)
-# Decision: NO TRIGGER (< 4)
+echo '{"prompt":"fix auth and refactor login"}' | bash harness/multiagent-detect.sh --dry-run
 ```
 
-Biases toward false negatives — better to miss a suggestion than spam irrelevant ones. Threshold auto-adjusts when F1 drops below target.
+### SkillAttention (Optional)
 
-### Plugin System — Drop-In Hooks
+ONNX semantic embedding layer: user prompt → all-MiniLM-L6-v2 embedding → cosine similarity against skill utterance database → gated by per-skill attention weights. Requires `SKILL_ATTENTION_MODEL_DIR` env var. Gracefully disabled when not configured.
+
+### Plugin System
+
+Drop `.sh` files into `hooks/` with naming convention `<Event>[_<Priority>]--<Name>.sh`:
 
 ```
 hooks/
@@ -242,34 +202,45 @@ hooks/
 └── Stop_10--loop-failure-check.sh          ← failure scan
 ```
 
-### Loop Budget — Token Kill Switch
-
-```bash
-python harness/loop-budget-tracker.py check --json
-# {"daily_percent": 0.0, "status": "ok"}
-```
-
-- **80%** → WARNING injected at session start
-- **100%** → KILL, all loop executions blocked
-- Per-pattern cost tracking in `budget.json`
-
-### Stats CLI — Query Everything
+### Stats CLI
 
 ```bash
 python harness/stats.py                  # dashboard
-python harness/stats.py sessions         # session log list
-python harness/stats.py multiagent       # MultiAgentOpt metrics
+python harness/stats.py sessions         # session list
+python harness/stats.py hooks            # hook error analysis
+python harness/stats.py skills           # SkillOpt P/R/F1
+python harness/stats.py multiagent       # MultiAgentOpt analysis
 python harness/stats.py trends --json    # machine-readable trends
 ```
 
-### Data Lifecycle — Auto-Cleanup
+### Data Lifecycle
 
 | Data | Threshold | Action |
 |---|---|---|
 | `MEMORY.md` | >64 KB | Rotated to `archive/` |
 | Session logs | >90 days | Archived to `archive/` |
 | `ERRORS.md` | >1 MB | Rotated to `archive/` |
-| Run log | >90 days | Pruned to `loop-engineering/archive/` |
+
+---
+
+## 8 Loop Patterns
+
+| Pattern | Cadence | Risk | Maker | Checker |
+|---|---|---|---|---|
+| Daily Triage | 1d | low | `issue-triage` | `verification-before-completion` |
+| PR Babysitter | 5-15m | high | `babysit` | `requesting-code-review` |
+| CI Sweeper | 5-15m | very high | `systematic-debugging` | `verification-before-completion` |
+| Dependency Sweeper | 6h-1d | medium | `security-guardian` | `verification-before-completion` |
+| Changelog Drafter | 1d | low | `repo-recap` | `verification-before-completion` |
+| Post-Merge Cleanup | 1d-6h | low | `finishing-a-development-branch` | `verification-before-completion` |
+| Issue Triage | 2h-1d | low | `issue-triage` | `verification-before-completion` |
+| Role-Collab | on-demand | medium | `role-collab` | `verification-before-completion` |
+
+Each pattern starts at **L0** (draft) → **L1** (report-only) → **L2** (assisted fixes + human gates) → **L3** (unattended). Advancement requires zero critical failures, readiness-audit score ≥65 (L2) or ≥85 (L3), and explicit human approval.
+
+### 9 Failure Modes Detected
+
+`infinite_fix_loop` · `state_rot` · `verifier_theater` · `notification_fatigue` · `token_burn` · `over_reach` · `escalation_failure` · `dead_loop` · `budget_blowout`
 
 ---
 
@@ -277,34 +248,35 @@ python harness/stats.py trends --json    # machine-readable trends
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `HARNESS_PYTHON` | auto-detected | Override Python interpreter path |
+| `HARNESS_PYTHON` | auto-detected | Override Python interpreter |
 | `HARNESS_ROOT` | auto-detected | Override config root directory |
 | `DISABLED_HOOKS` | — | Comma-separated hook names to disable |
-| `PROJECT_NAME` | auto-detected | Override project name for per-project config |
-| `LOOP_BUDGET_EXHAUSTED` | — | Set to `1` to block all loop executions |
+| `PROJECT_NAME` | auto-detected | Per-project config override |
+| `LOOP_BUDGET_EXHAUSTED` | — | Set `1` to block all loop executions |
+| `SKILL_ATTENTION_MODEL_DIR` | — | ONNX model dir (enables SkillAttention) |
+| `SKILL_ATTENTION_PYTHON` | `$PY` | Python with onnxruntime + tokenizers |
+| `CLAUDE_MEM_DATA_DIR` | auto-detected | Override claude-mem database dir |
 
 ---
 
-## Data Flow — One Session Lifecycle
+## Session Lifecycle
 
 ```
 Session Start
-├─→ health-check.sh: 9-section validation
-├─→ session-start-inject.sh: mandatory checklist + F1 alerts + loop failure alerts
-├─→ [plugin] loop-budget-check.sh: budget status
+├─ health-check.sh: 9-section validation
+├─ session-start-inject.sh: checklist + F1 alerts + loop alerts
+├─ [plugin] loop-budget-check.sh: budget status
 │
-User sends message
-├─→ post-task-detect.sh: completion keywords? → write reminder
-├─→ multiagent-detect.sh: parallel dispatch? → suggestion
+User message
+├─ post-task-detect.sh: completion? → write reminder
+├─ multiagent-detect.sh: complex? → agent suggestion
+├─ skill-attention-query.sh: semantic skill match (if enabled)
 │
-... AI executes task ...
-│
-User says "搞定了" / "done"
-├─→ post-task-detect.sh detects → injects Tier1/Tier2 write reminder
+... AI works ...
 │
 Session End
-├─→ training-collect.sh → compute EMA/F1 → update meta.json
-├─→ [plugin] loop-failure-check.sh → scan failure modes → update failure-report.json
+├─ training-collect.sh: compute EMA/F1 → update meta.json
+├─ [plugin] loop-failure-check.sh: scan 9 failure modes
 ```
 
 ---
@@ -312,24 +284,25 @@ Session End
 ## Requirements
 
 - Claude Code CLI v2.1+
-- Python 3.8+ (for inline Python in hooks)
+- Python 3.8+ (for inline scripting in hooks)
 - Bash (Linux / macOS / WSL) or Git Bash (Windows)
+
+**Optional** (SkillAttention):
+- `onnxruntime` + `tokenizers` Python packages
+- all-MiniLM-L6-v2 ONNX model → set `SKILL_ATTENTION_MODEL_DIR`
 
 ---
 
 ## Acknowledgements
 
-lean-hooks draws inspiration from:
+- **[Loop Engineering](https://github.com/cobusgreyling/loop-engineering)** — governance primitives, readiness levels, failure mode catalog
+- **[Everything Claude Code](https://github.com/affaan-m/ECC)** — hook runtime control, security audit patterns
+- **[LangGraph](https://github.com/langchain-ai/langgraph)** — stateful agent orchestration
+- **[claude-mem-lite](https://github.com/thedotmack/claude-mem-lite)** — SQLite session log search
+- **[CodeGraph](https://github.com/anthropics/codegraph)** — tree-sitter knowledge graph
+- **Claude Code** — the hook infrastructure that makes this possible
 
-- **[Loop Engineering](https://github.com/cobusgreyling/loop-engineering)** — Loop governance primitives, readiness levels, design checklist, failure mode catalog
-- **[Everything Claude Code (ECC)](https://github.com/affaan-m/ECC)** — Hook runtime control, security audit patterns, rules layering
-- **[LangGraph](https://github.com/langchain-ai/langgraph)** — Stateful agent orchestration, two-phase detection architecture
-- **[claude-mem-lite](https://github.com/thedotmack/claude-mem-lite)** — SQLite-backed session log search
-- **[CodeGraph](https://github.com/anthropics/codegraph)** — Tree-sitter knowledge graph for structural code queries
-- **[superpowers](https://github.com/claude-plugins-official/superpowers)** — Skill system patterns and feedback loop design
-- **Claude Code** — The hook infrastructure that makes this project possible
-
-**Vibe Coded**: This entire project was built through vibe coding — ideas and direction from the author, every line written by Claude Code.
+**Vibe Coded**: Ideas and direction from the author, every line written by Claude Code.
 
 ## License
 

@@ -1,0 +1,215 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TrainingLoopMeta",
+  "description": "Machine-learning-inspired training metrics schema for the unified behavioral quality system (v2.1). Stored at config/training-loop/meta.json.",
+  "type": "object",
+  "required": ["version", "sessions", "dimensions"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "enum": ["2.1", "2.2"],
+      "description": "Schema version. Increment when breaking changes are introduced."
+    },
+    "sessions": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total number of substantive sessions processed."
+    },
+    "last_session": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp of the most recent session."
+    },
+    "last_optimized": {
+      "type": "string",
+      "description": "Human-readable note about the last optimization action taken."
+    },
+    "global": {
+      "type": "object",
+      "description": "Hyperparameters shared across all dimensions.",
+      "properties": {
+        "ema_lambda": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.1818,
+          "description": "EMA decay factor. Default 2/(10+1) yields effective memory of ~10 sessions."
+        },
+        "f1_target": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.75,
+          "description": "Target F1 score. Dimensions below this trigger threshold adjustment."
+        },
+        "min_adjust_interval": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 3,
+          "description": "Minimum sessions between automatic threshold adjustments to prevent thrashing."
+        },
+        "complexity_gamma": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.15,
+          "description": "Weight of the complexity penalty in the total loss."
+        },
+        "min_signals_for_adjustment": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10,
+          "description": "Minimum total signals (TP+FP+FN) per dimension before threshold adjustment can trigger."
+        },
+        "adjustment_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Master kill-switch for automatic threshold adjustment. When false, system is in L0 (report-only) mode."
+        }
+      }
+    },
+    "dimensions": {
+      "type": "object",
+      "description": "Per-dimension state. Keys: skill, multiagent, toolcall.",
+      "properties": {
+        "skill": { "$ref": "#/definitions/dimension" },
+        "multiagent": { "$ref": "#/definitions/dimension" },
+        "toolcall": { "$ref": "#/definitions/dimension" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "definitions": {
+    "dimension": {
+      "type": "object",
+      "required": ["counts"],
+      "description": "State for a single training dimension (SkillOpt, MultiAgentOpt, or ToolCallOpt).",
+      "properties": {
+        "counts": {
+          "type": "object",
+          "required": ["tp", "fp", "fn"],
+          "description": "Confusion-matrix counts. Ground truth = feedback.md.",
+          "properties": {
+            "tp": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "True Positives: correct action taken."
+            },
+            "fp": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "False Positives: incorrect action taken."
+            },
+            "fn": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "False Negatives: correct action required but not taken."
+            }
+          }
+        },
+        "metrics": {
+          "type": "object",
+          "description": "Point-in-time precision/recall/F1 computed from counts.",
+          "properties": {
+            "precision": { "type": "number", "minimum": 0, "maximum": 1 },
+            "recall": { "type": "number", "minimum": 0, "maximum": 1 },
+            "f1": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "has_data": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether any signals (TP+FP+FN) exist for this dimension. When false, precision/recall/f1 are None."
+        },
+        "ema": {
+          "type": "object",
+          "description": "Exponentially weighted moving averages for smoothed trajectories.",
+          "properties": {
+            "precision": { "type": "number", "minimum": 0, "maximum": 1 },
+            "recall": { "type": "number", "minimum": 0, "maximum": 1 },
+            "f1": { "type": "number", "minimum": 0, "maximum": 1 },
+            "loss": { "type": "number", "minimum": 0 },
+            "last_updated_session": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Session index when EMA was last updated."
+            },
+            "last_signal_count": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Total signal count (TP+FP+FN) when EMA was last updated. Used for signal-count EMA: EMA only updates when this increases."
+            }
+          }
+        },
+        "loss": {
+          "type": "object",
+          "description": "Adaptive loss decomposition.",
+          "properties": {
+            "core": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Adaptive precision-recall loss L_core = [(1-P)^2 + (1-R)^2] / [(1-P)+(1-R)+eps]"
+            },
+            "complexity_penalty": {
+              "type": "number",
+              "minimum": 0,
+              "description": "gamma * max(0, (C_current - C_target) / C_target)"
+            },
+            "total": {
+              "type": "number",
+              "minimum": 0,
+              "description": "core + complexity_penalty"
+            }
+          }
+        },
+        "complexity": {
+          "type": "object",
+          "description": "Complexity tracking for the complexity penalty term.",
+          "properties": {
+            "current": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Observed average invocations/dispatches/calls per session. Populate via harness instrumentation."
+            },
+            "target": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Desirable baseline per session. Defaults: skill=2.0, multiagent=0.5, toolcall=8.0."
+            }
+          }
+        },
+        "threshold": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Legacy v1 alert threshold (number of signals before SessionStart injection). Retained for backward compatibility."
+        },
+        "threshold_config": {
+          "type": "object",
+          "description": "Machine-readable config location for dimensions with numeric tunable thresholds (e.g. multiagent).",
+          "properties": {
+            "current_value": { "type": "number" },
+            "min_value": { "type": "number", "minimum": 1 },
+            "max_value": { "type": "number" },
+            "config_file": {
+              "type": "string",
+              "description": "Absolute path to the file containing the threshold variable."
+            },
+            "config_pattern": {
+              "type": "string",
+              "description": "Regex or variable name used to locate the threshold in config_file."
+            }
+          }
+        },
+        "last_adjusted_session": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Session index when an automatic threshold adjustment was last applied."
+        },
+        "last_optimized": {
+          "type": "string",
+          "description": "Human-readable note about the last optimization for this dimension."
+        }
+      }
+    }
+  }
+}

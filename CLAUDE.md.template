@@ -30,6 +30,9 @@ Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-s
 | "multiagent miss/false positive" | Record to `multiagent-feedback/feedback.md` |
 | "security/安全" + review | `security-review` |
 | "refactor/simplify/review code quality" | `code-simplifier` (Rust) |
+| "role-collab/多角色协同/并行审查" | `role-collab` |
+| "design loop/loop engineer/设计循环" | `loop-engineer` |
+| "audit loops/loop readiness/循环审计" | `loop-audit` |
 
 **Rule: when a pattern matches, invoke the skill. Don't deliberate. Invoke first, then decide if it was the right call.** Skipping = repeated mistakes.
 
@@ -115,7 +118,11 @@ All three write to the same `training-loop/feedback.md` under their respective `
 - False positives: A trigger fired but was irrelevant
 - ToolCall observations: Positive (reinforce) or Negative (correct)
 
-**Metrics**: Every Stop hook computes Precision / Recall / F1 per dimension, with EMA smoothing (λ=0.1818, ~10-session memory). A core loss function L = [(1-P)² + (1-R)²] / [(1-P)+(1-R)+ε] + γ·complexity_penalty drives adaptive threshold adjustment when F1 < 0.75 over ≥3 sessions. See `training-loop/metrics-design.md` for full formulas.
+**Metrics**: Shared computation via `training-loop/metrics_core.py` (v2.2). Signal-count EMA updates only when new feedback signals arrive (not on every session). When a dimension has zero signals (TP=FP=FN=0), metrics return `has_data=False` with values of `None` instead of vacuous P=R=F1=1.0.
+
+**Threshold adjustment gates** (v2.2):
+- `adjustment_enabled` (default: false): Master kill-switch. System starts in L0 (report-only) mode. Set to true only after >=50 total signals across all dimensions.
+- `min_signals_for_adjustment` (default: 10): Per-dimension minimum signals before adjustment can trigger.
 
 **Enhanced Scoring**: `weighted-scoring.py` adds time-decay weights, trend analysis, and confidence scoring on top of raw F1. Run manually or integrate into Stop hook.
 
@@ -152,3 +159,19 @@ Two-phase heuristic scoring system detects complex tasks and suggests parallel a
 **Plugin system**: `hooks/*.sh` auto-registered by `plugin-loader.sh` with priority ordering.
 **Error handling**: All hooks wrapped with `error-handler.sh` (timeout + error_log to ERRORS.md, non-blocking).
 **DISABLED_HOOKS**: Temporarily disable hooks via `export DISABLED_HOOKS="multiagent-detect,post-task-detect"`.
+
+### 6.5 SkillAttention — Semantic Skill Matching (Optional)
+
+When `SKILL_ATTENTION_MODEL_DIR` is set to an ONNX embedding model directory (e.g. all-MiniLM-L6-v2), `skill-attention-query.sh` runs on `UserPromptSubmit` to provide semantic skill matching via cosine similarity + attention weights. This augments the keyword-based skill trigger system with fuzzy semantic understanding.
+
+**Setup**: Set env vars `SKILL_ATTENTION_MODEL_DIR` and optionally `SKILL_ATTENTION_PYTHON` (interpreter with `onnxruntime` + `tokenizers`). See `.env.example`.
+
+### 6.6 Data Lifecycle
+
+Configured in `lean-hooks.toml` `[data_lifecycle]` section:
+
+| Data | Threshold | Action |
+|---|---|---|
+| MEMORY.md | >64 KB | Rotated to `archive/` |
+| Session logs | >90 days | Archived to `archive/` |
+| ERRORS.md | >1 MB | Pruned to `archive/` |
